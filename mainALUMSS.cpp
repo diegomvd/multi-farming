@@ -8,14 +8,18 @@ can be found in the first line of the program.
 
 0- EQUIVALENCE BETWEEN PARAMTER NAMES IN CODE AND IN PAPER
       CODE    -   PAPER   -   MEANING
-      ye     -   ye      -   productivity of intensive agriculture
+      ye     -   beta      -   fraction of the low-intensity productivity explained by ES provision
       z     -   z       -   saturation exponent of ecosystem servicaes with area
-      a       -   alpha   -   preference for intensification
-      w       -   omega   -   clustering parameter
-      1/Tag   -   sigma   -   sensitivity to resource deficit
-      1/sFL   -   rho_L   -   fertility loss sensitivtiy to ecosystem service provision
-      1/sR    -   rho_R   -   recovery sensitivity to ecosystem service provision
-      1/sD    -   rho_D   -   degradation sensitivity to ecosystem service provision
+      a       -   alpha   -   fraction of sparing farms
+      w       -   omega   -   clustering/affinity parameter
+      mS   -   sigma   -   average responsiveness to demand
+      wS   -   not in the paper   -  responsiveness width between farms
+      k0 - K_0 - number of households that can be sustained by a high-intensity agricultural cell
+      dES - d_N - connectivity distance, i.e. distance at which ES flow
+      nF - |F| - number of farms in the landscape
+      sFL   -   rho_L   -   fertility loss sensitivtiy to ecosystem service provision
+      sR    -   rho_R   -   recovery sensitivity to ecosystem service provision
+      sD    -   rho_D   -   degradation sensitivity to ecosystem service provision
 
 The sensitivities are growth or decay rates with respect to ecosystem
 service provision of the transitions propensities (probabilities per unit time).
@@ -27,10 +31,9 @@ The agricultural landscape is initialized by specifying:
   - nSide landscape size-length in number of cells. Total number of cells is nSide*nSide
   - d0 the initial fraction of degraded land
   - a0 the initial fraction of agricultural land
-  - a the preference for intensification: gives the fraction of agricultural
-    cells that are intensively cultivated
+  - a the fraction of sparing farms
   - w the clustering parameter: controls the level of clustering between same
-    land cover/use types
+    high-intensity agricultre and off integration between low-intensity and natural
 The border conditions are periodic, hence there are not border effects in our
 simulations and we use the Von-Neumann neighbourhood.
 
