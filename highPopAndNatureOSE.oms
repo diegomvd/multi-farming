@@ -1,0 +1,53 @@
+/*
+This script launches a Pattern Space Exploration on the human population-natural area phase space.
+It is a preliminary analysis on the possible combinations of human and nature outputs before digging
+on details of landscape structure and origins of suitable human nature combinations
+*/
+
+// Import the model plugin
+import _file_.modelDeclaration._
+
+val P = Val[Double]
+val N = Val[Double]
+
+val eukaryoteEnvironment = LocalEnvironment(40)
+
+val readModelOutput =
+    ScalaTask("""
+    // read file as an array of lines and get last line
+    val lastLine = scala.io.Source.fromFile(output).getLines.toList.last.mkString
+    // split the string and store it in an array
+    val values = lastLine.split(" ")
+    // val P = values(1).toDouble
+    val N = values(2).toDouble
+    """
+    )set(
+        inputs+=output,
+        outputs+=(N)
+    )
+
+val modelRunAndRead = MoleTask(modelPluginEuka -- readModelOutput)
+
+// def collapseCount(population: Array[Double]): Double = (population.groupBy(identity).mapValues(_.map(_ =>1).reduce(_+_))(0.0).toDouble)/(population.size.toDouble)
+
+val naturePopOSE = OSEEvolution(
+  evaluation = modelRunAndRead,
+  parallelism = 40,
+  termination = 40000,
+  origin = Seq(
+    nF in Seq(1.0,4.0,16.0,64.0,256.0,1024.0),
+    a in (0.0 to 1.0 by 0.3333),
+    dES in (1.1 to 16.1 by 4.0),
+    mS in (0.75 to 1.25 by 0.25),
+  ),
+  objective = Seq(
+    -N under -0.5,
+  ),
+  stochastic = Stochastic(seed = mySeed, sample = 20)
+)
+
+(naturePopOSE on eukaryoteEnvironment hook (workDirectory / "resultsHighNaturePopOSE-230921", frequency = 100) )
+
+// P aggregate collapseCount _ under 0.1
+
+// 5*3*4*2=120 origins

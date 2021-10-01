@@ -1,0 +1,979 @@
+// to execute from the command line: openmole -s explorationALUMSS.oms
+
+// output files
+val agreOut = Val[File]
+val f = Val[File]
+
+// random number generator seed
+val mySeed = Val[Int]
+
+// model parameters
+val ksi = Val[Double]
+val y0 = Val[Double]
+val sar = Val[Double]
+val a = Val[Double]
+val w = Val[Double]
+val Tag = Val[Double]
+val Tab = Val[Double]
+val Tr = Val[Double]
+val Td = Val[Double]
+val d = Val[Double]
+val mdc = Val[Double]
+val ndc = Val[Double]
+
+// simulation parameters
+val T = Val[Double]
+val dtp = Val[Double]
+val L = Val[Double]
+val d0 = Val[Double]
+val a0 = Val[Double]
+val dtsave = Val[Double]
+
+// variable outputs
+val t = Val[Double]
+val nFrag = Val[Double]
+val meanSize = Val[Double]
+val stdSize = Val[Double]
+val maxSize = Val[Double]
+val meanES = Val[Double]
+val stdES = Val[Double]
+val P = Val[Double]
+val N = Val[Double]
+val D = Val[Double]
+val A0 = Val[Double]
+val A1 = Val[Double]
+val Y = Val[Double]
+val C = Val[Double]
+val nMax = Val[Double]
+val nMin = Val[Double]
+val pMax = Val[Double]
+val pMin = Val[Double]
+val ripleyN = Val[Double]
+val ripleyD = Val[Double]
+val ripleyA0 = Val[Double]
+val ripleyA1 = Val[Double]
+val meanR = Val[Double]
+val stdR = Val[Double]
+val corrLen = Val[Double]
+
+val Pmean = Val[Double]
+val Nmean = Val[Double]
+val Pstd = Val[Double]
+val Nstd = Val[Double]
+
+///////////////////////////////////////////////////////////////////////////////
+// 1- MODEL PLUGIN AS AN EXECUTABLE FILE
+///////////////////////////////////////////////////////////////////////////////
+
+val scriptTask =
+  SystemExecTask(
+    command = Seq(
+      "./alumss-exec ${T} ${dtp} ${L} ${a0} ${d0} ${ksi} ${y0} ${sar} ${a} ${w} ${Tag} ${Tab} ${Tr} ${Td} ${d} ${mdc} ${ndc} ${dtsave} ${mySeed} "),
+    )set(
+      (inputs, outputs) += (T,dtp,L,a0,d0,ksi,y0,sar,a,w,Tag,Tab,Tr,Td,d,mdc,ndc,dtsave,mySeed),
+
+      // outputFiles is the path to the file containing the model outputs
+      // outputFiles += ("DATA_AGRE_T_${T}_dtp_${dtp}_n_${L}_a0_${a0}_d0_${d0}_ksi_${ksi}_y0_${y0}_sar_${sar}_a_${a}_w_${w}_Tag_${Tag}_Tab_${Tab}_Tr_${Tr}_Td_${Td}_d_${d}_dtsave_${dtsave}_expid_${mySeed}.dat",agreOut),
+      outputFiles += ("DATA_AGRE",agreOut),
+      // resources is the path to the executable that runs the simulations
+      resources += "/home/AD.LSM.CNRS.FR/diego.bengochea-paz/ALUMSS/ALUMSS/alumss-exec",
+      // resources += "/home/karpouzi/Research/Chapter2/gillespie-land-use/alumss-exec",
+
+      // default parameter and initialization values
+      T:=3000.0,
+      dtp:=0.1,
+      L:=40,
+      a0:=0.2,
+      d0:=0.0,
+      ksi:=1.2,
+      y0:=0.2,
+      sar:=0.25,
+      a:=0.0,
+      w:=0.0,
+      Tag:=0.1,
+      Tab:=50.0,
+      Tr:=5.0,
+      Td:=50.0,
+      d:=1.0,
+      mdc:=1.1,
+      ndc:=1.1,
+      dtsave:=4000.0,
+      mySeed:=1111
+    )
+
+///////////////////////////////////////////////////////////////////////////////
+// 2 - HOOKS FOR THE REPLICATION EXPERIMENTS
+///////////////////////////////////////////////////////////////////////////////
+
+// hook to append the output across time of a simulation a replications file.
+// the name of the replication file contains the information on the parameter
+// values
+val hookAppend = AppendToFileHook(workDirectory/"REPS_AGRE_T_${T}_dtp_${dtp}_n_${L}_a0_${a0}_d0_${d0}_ksi_${ksi}_y0_${y0}_sar_${sar}_a_${a}_w_${w}_Tag_${Tag}_Tab_${Tab}_Tr_${Tr}_Td_${Td}_d_${d}_mdc_${mdc}_ndc_${ndc}_dtsave_${dtsave}.csv", "${agreOut.content}")
+
+// hook to create and initialize the header of a replications file. file must
+// be previously created in a scalaTask
+// the name of the replication file contains the information on the parameter
+// values
+
+val copyHook = CopyFileHook(f, workDirectory/"REPS_AGRE_T_${T}_dtp_${dtp}_n_${L}_a0_${a0}_d0_${d0}_ksi_${ksi}_y0_${y0}_sar_${sar}_a_${a}_w_${w}_Tag_${Tag}_Tab_${Tab}_Tr_${Tr}_Td_${Td}_d_${d}_mdc_${mdc}_ndc_${ndc}_dtsave_${dtsave}.csv")
+
+///////////////////////////////////////////////////////////////////////////////
+// 3- ENVIRONMENT SETUP: USE 40 LOCAL CORES
+///////////////////////////////////////////////////////////////////////////////
+
+val env = LocalEnvironment(40)
+
+///////////////////////////////////////////////////////////////////////////////
+// 4 - DECLARATION OF NUMERICAL EXPERIMENTS
+//////////////////////////////////////////////////////////////////////////////
+
+// doing a couple of replications to see the dynamics emerging from changin ndc
+
+val parameterSet = ScalaTask("""
+    val ksi = 1.2
+    val y0 = 0.2
+    val sar = 0.25
+    val a = 0.0
+    val w = 0.0
+    val Tag = 0.1
+    val Tab = 50.0
+    val Tr = 5.0
+    val Td = 50.0
+    val d = 3.1
+    val T = 3000.0
+    val dtp = 0.1
+    val L = 40.0
+    val d0 = 0.0
+    // val a0 = 0.2
+    val mdc = 1.1
+    val ndc = 3.1
+    val dtsave = 1.0
+    // create a file with a header consisting of all the model macro outputs
+    val f = newFile()
+    f.content = "t P N D A0 A1 Y nFrag meanSize stdSize maxSize meanES stdES connectance nMax nMin pMax pMin ripleyN ripleyD ripleyA0 ripleyA1 meanR stdR corrLen\n"
+""") set(
+    inputs += a0,
+    outputs += (f,T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,y0,Td,d,mdc,ndc,dtsave)
+)
+
+val replications =
+  Replication(
+    evaluation = scriptTask hook hookAppend on env,
+    seed = mySeed,
+    sample = 5
+  )
+
+val explorationA0 = ExplorationTask( a0 in Seq(0.1,0.2,0.5) )
+
+// val explorationNDC = ExplorationTask( ndc in Seq(1.1,2.1,3.1,4.1,5.1) )
+//
+// val explorationMDC = ExplorationTask( mdc in Seq(1.1,2.1,3.1,4.1,5.1) )
+
+explorationA0 -< (parameterSet hook copyHook) -- replications
+// explorationNDC -< (parameterSet hook copyHook) -- replications
+// explorationMDC -< (parameterSet hook copyHook) -- replications
+
+// i saw that ndc = 3.1 was interesting ! i now vary mdc to catch possible interactions
+// between them, I should think of a deeper question to ask with my OM tools
+
+// doing a couple of replications to see the dynamics emerging from changin mdc
+
+// direct sampling for bifurcation diagram as a function of ndc
+//
+// val readOutputFile =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val P = valuesAgre(1).toDouble
+//     val N = valuesAgre(2).toDouble
+//     val D = valuesAgre(3).toDouble
+//     val A0 = valuesAgre(4).toDouble
+//     val nMax = valuesAgre(14).toDouble
+//     val nMin = valuesAgre(15).toDouble
+//     val pMax = valuesAgre(16).toDouble
+//     val pMin = valuesAgre(17).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,y0,sar,a,w,Tag,Tab,Tr,Td,d,mdc,ndc,dtsave,mySeed),
+//         outputs+=(P,N,D,A0,nMax,nMin,pMax,pMin)
+//     )
+//
+// val runAndRead = MoleTask(scriptTask -- readOutputFile)
+//
+// val replicationsLongTerm =
+//   Replication(
+//     evaluation = runAndRead,
+//     seed = mySeed,
+//     sample = 5,
+//     aggregation = Seq (
+//       d aggregate average,
+//       ndc aggregate average,
+//       P aggregate average,
+//       N aggregate average,
+//       D aggregate average,
+//       A0 aggregate average,
+//       nMax aggregate average,
+//       nMin aggregate average,
+//       pMax aggregate average,
+//       pMin aggregate average)
+//   )
+//
+// val longTermSampling =
+// DirectSampling(
+//   evaluation = replicationsLongTerm,
+//   sampling =
+//     (ndc in Seq(1.1,2.1,3.1,4.1,5.1))x
+//     (d in Seq(1.1,2.1,3.1,4.1,5.1)),
+// )
+
+// longTermSampling on env hook (workDirectory / "experimentNDCD-2-140621.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//
+// ///////////////////////////////////////////////////////////////////////////////
+// // Begin of clustering experiment for figure 3:
+// // Replications to get the time dynamics of the fragmentation measures
+// ///////////////////////////////////////////////////////////////////////////////
+// val setParamClusteringExp=ScalaTask("""
+//     val ksi = 1.2
+//     val sar = 0.25
+//     val a = 0.0
+//     val Tag = 0.1
+//     val Tab = 50.0
+//     val Tr = 5.0
+//     val Td = 50.0
+//     val d = 1.0
+//     val T = 4000.0
+//     val dtp = 0.1
+//     val L = 40.0
+//     val d0 = 0.0
+//     val a0 = 0.2
+//     val dtsave = 1.0
+//     // create a file with a header consisting of all the model macro outputs
+//     val f = newFile()
+//     f.content = "t P N D A0 A1 Y nFrag meanSize stdSize maxSize meanES stdES connectance nMax nMin pMax pMin ripleyN ripleyD ripleyA0 ripleyA1\n"
+// """) set(
+//     inputs += w,
+//     outputs +=(f,T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave)
+// )
+// // use this function to get all the data across time stored
+// val replicationsClustering =
+//   Replication(
+//     evaluation = scriptTask hook hookAppend on env,
+//     seed = mySeed,
+//     sample = 20
+//   )
+// val clusteringExploration = ExplorationTask( w in Seq(0.0,4.0,8.0) )
+//
+// ///////////////////////////////////////////////////////////////////////////////
+// // End of clustering experiment for figure 3
+// ///////////////////////////////////////////////////////////////////////////////
+//
+// ///////////////////////////////////////////////////////////////////////////////
+// // Begin of intensification experiment for figure 1
+// ///////////////////////////////////////////////////////////////////////////////
+// val setParamIntenseExp=ScalaTask("""
+//     val ksi = 1.2
+//     val sar = 0.25
+//     val w = 0.0
+//     val Tag = 0.1
+//     val Tab = 50.0
+//     val Tr = 5.0
+//     val Td = 50.0
+//     val d = 1.0
+//     val T = 3000.0
+//     val dtp = 0.1
+//     val L = 40.0
+//     val d0 = 0.0
+//     val a0 = 0.25
+//     val dtsave = 1.0
+//     // create a file with a header consisting of all the model macro outputs
+//     val f = newFile()
+//     f.content = "t P N D A0 A1 Y nFrag meanSize stdSize maxSize meanES stdES connectance nMax nMin pMax pMin ripleyN ripleyD ripleyA0 ripleyA1\n"
+// """) set(
+//     inputs += a,
+//     outputs +=(f,T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave)
+// )
+// // use this function to get all the data across time stored
+// val replicationsIntensification =
+//   Replication(
+//     evaluation = scriptTask hook hookAppend on env,
+//     seed = mySeed,
+//     sample = 20
+//   )
+// val intensificationExploration = ExplorationTask( a in Seq(0.06,0.07,0.08,0.09) )
+// // end of intensification exploration fig 1
+// ///////////////////////////////////////////
+//
+// //////////////////////////////////////////////////
+// // begin of zoom for detail on landscape structure perco transition fig 2
+// val setParamZoomPerco=ScalaTask("""
+//     val ksi = 1.2
+//     val sar = 0.25
+//     val a = 0.0
+//     val w = 0.0
+//     val Tag = 0.1
+//     val Tab = 50.0
+//     val Tr = 5.0
+//     val Td = 50.0
+//     val d = 1.0
+//     val T = 100.0
+//     val dtp = 0.1
+//     val L = 40.0
+//     val d0 = 0.0
+//     val a0 = 0.35
+//     val dtsave = 0.01
+//     // create a file with a header consisting of all the model macro outputs
+//     val f = newFile()
+//     f.content = "t P N D A0 A1 Y nFrag meanSize stdSize maxSize meanES stdES connectance nMax nMin pMax pMin ripleyN ripleyD ripleyA0 ripleyA1\n"
+// """) set(
+//     outputs +=(f,T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave)
+// )
+// // use this function to get all the data across time stored
+// val replicationsZoomPerco =
+//   Replication(
+//     evaluation = scriptTask hook hookAppend on env,
+//     seed = mySeed,
+//     sample = 30
+//   )
+// // end of perco zoom fig 2
+// ///////////////////////////////////////////
+//
+// //////////////////////////////////////////
+// // begin of longterm sampling for intensification
+//
+// val readFinalStateIntensification =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val P = valuesAgre(1).toDouble
+//     val N = valuesAgre(2).toDouble
+//     val nMax = valuesAgre(14).toDouble
+//     val nMin = valuesAgre(15).toDouble
+//     val pMax = valuesAgre(16).toDouble
+//     val pMin = valuesAgre(17).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+//         outputs+=(P,N,nMax,nMin,pMax,pMin)
+//     )
+//
+// val finalStateIntensificationTask = MoleTask(scriptTask -- readFinalStateIntensification)
+//
+// val replicationsFinalStateIntensification =
+//   Replication(
+//     evaluation = finalStateIntensificationTask,
+//     seed = mySeed,
+//     sample = 20,
+//     aggregation = Seq (
+//       T aggregate average,
+//       dtp aggregate average,
+//       L aggregate average,
+//       a0 aggregate average,
+//       d0 aggregate average,
+//       ksi aggregate average,
+//       sar aggregate average,
+//       a aggregate average,
+//       w aggregate average,
+//       Tag aggregate average,
+//       Tab aggregate average,
+//       Tr aggregate average,
+//       Td aggregate average,
+//       d aggregate average,
+//       dtsave aggregate average,
+//       mySeed aggregate average,
+//       P aggregate average,
+//       N aggregate average,
+//       nMax aggregate average,
+//       nMin aggregate average,
+//       pMax aggregate average,
+//       pMin aggregate average)
+//   )
+//
+// val longTermIntensification =
+// DirectSampling(
+//   evaluation = replicationsFinalStateIntensification on env,
+//   sampling =
+//     (T is 3000.0) x
+//     (dtp is 0.1) x
+//     (L is 40.0) x
+//     (a0 is 0.23) x
+//     (d0 is 0.0) x
+//     (ksi is 1.2) x
+//     (sar is 0.25) x
+//     (w is 0.0) x
+//     (Tab is 50.0) x
+//     (Tr is 5.0) x
+//     (Td is 50.0) x
+//     (d is 1.0) x
+//     (dtsave is "T") x
+//     ( a in Seq(0.05,0.06,0.07,0.08,0.09,0.1) ) x
+//     (Tag in LogRange(0.03,0.3,20)),
+//     // (( Tag in LogRange(0.15,0.3,10) ) x ( a is 0.1 )) ::
+//     // (( Tag in LogRange(0.12,0.25,10) ) x ( a is 0.2 )) ::
+//     // (( Tag in LogRange(0.05,0.13,10) ) x ( a is 0.3 )) ::
+//     // (( Tag in LogRange(0.03,0.1,10) ) x ( a is 0.4 )) ::
+//     // (( Tag in LogRange(0.03,0.06,10) ) x ( a is 0.5 )) ::
+//     // (( Tag in LogRange(0.02,0.05,10) ) x ( a is 0.6 )) ::
+//     // (( Tag in LogRange(0.01,0.04,10) ) x ( a is 0.7 )) ::
+//     // (( Tag in LogRange(0.01,0.04,10) ) x ( a is 0.8 )) ::
+//     // (( Tag in LogRange(0.01,0.04,10) ) x ( a is 0.9 )) ::
+//     // (( Tag in LogRange(0.01,0.04,10) ) x ( a is 1.0 )),
+//     // ( a in Seq(0.0,0.25,0.5) ),
+//     // ( ( (Tag in LogRange(0.02,1.0,40)) x (a in Seq(0.0,0.333,0.666)) ) :: ( (Tag in (0.24 to 0.28 by 0.005)) x (a in Seq(0.0,0.333,0.666)) ) ),
+// )
+//
+//
+// // end of longterm sampling for intensification
+// //////////////////////////////////////////
+//
+// //////////////////////////////////////////
+// // begin of longterm sampling for clustering
+//
+// val readFinalStateClustering =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val P = valuesAgre(1).toDouble
+//     val N = valuesAgre(2).toDouble
+//     val nMax = valuesAgre(14).toDouble
+//     val nMin = valuesAgre(15).toDouble
+//     val pMax = valuesAgre(16).toDouble
+//     val pMin = valuesAgre(17).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+//         outputs+=(P,N,nMax,nMin,pMax,pMin)
+//     )
+//
+// val finalStateClusteringTask = MoleTask(scriptTask -- readFinalStateClustering)
+//
+// val replicationsFinalStateClustering =
+//   Replication(
+//     evaluation = finalStateClusteringTask,
+//     seed = mySeed,
+//     sample = 20,
+//     aggregation = Seq (
+//       T aggregate average,
+//       dtp aggregate average,
+//       L aggregate average,
+//       a0 aggregate average,
+//       d0 aggregate average,
+//       ksi aggregate average,
+//       sar aggregate average,
+//       a aggregate average,
+//       w aggregate average,
+//       Tag aggregate average,
+//       Tab aggregate average,
+//       Tr aggregate average,
+//       Td aggregate average,
+//       d aggregate average,
+//       dtsave aggregate average,
+//       mySeed aggregate average,
+//       P,
+//       N,
+//       nMax,
+//       nMin,
+//       pMax,
+//       pMin)
+//   )
+//
+// val longTermClustering =
+// DirectSampling(
+//   evaluation = replicationsFinalStateClustering on env,
+//   sampling =
+//     (T is 4000.0) x
+//     (dtp is 0.1) x
+//     (L is 40.0) x
+//     (a0 is 0.2) x
+//     (d0 is 0.0) x
+//     (ksi is 1.2) x
+//     (sar is 0.25) x
+//     (Tab is 50.0) x
+//     (Tr is 5.0) x
+//     (Td is 50.0) x
+//     (d is 1.0) x
+//     (dtsave is "T") x
+//     (Tag in LogRange(0.02,1.0,40)) x
+//     (w in Seq(1.0,2.0,4.0)),
+// )
+//
+// // end of longterm sampling for clustering
+// //////////////////////////////////////////
+//
+//
+// //////////////////////////////////////////
+// // begin of longterm sampling for clustering2
+//
+// val readFinalStateClustering2 =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val N = valuesAgre(2).toDouble
+//     val maxSize = valuesAgre(10).toDouble
+//     val meanSize = valuesAgre(8).toDouble
+//     val stdSize = valuesAgre(9).toDouble
+//     val nFrag = valuesAgre(7).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+//         outputs+=(N,maxSize,meanSize,stdSize,nFrag)
+//     )
+//
+// val finalStateClusteringTask2 = MoleTask(scriptTask -- readFinalStateClustering2)
+//
+// val replicationsFinalStateClustering2 =
+//   Replication(
+//     evaluation = finalStateClusteringTask2,
+//     seed = mySeed,
+//     sample = 20,
+//     aggregation = Seq (
+//       T aggregate average,
+//       dtp aggregate average,
+//       L aggregate average,
+//       a0 aggregate average,
+//       d0 aggregate average,
+//       ksi aggregate average,
+//       sar aggregate average,
+//       a aggregate average,
+//       w aggregate average,
+//       Tag aggregate average,
+//       Tab aggregate average,
+//       Tr aggregate average,
+//       Td aggregate average,
+//       d aggregate average,
+//       dtsave aggregate average,
+//       mySeed aggregate average,
+//       N aggregate average,
+//       maxSize aggregate average,
+//       meanSize aggregate average,
+//       stdSize aggregate average,
+//       nFrag aggregate average)
+//   )
+//
+// val longTermClustering2 =
+// DirectSampling(
+//   evaluation = replicationsFinalStateClustering2 on env,
+//   sampling =
+//     (T is 0.0) x
+//     (dtp is 0.1) x
+//     (L is 40.0) x
+//     (Tag is 0.1) x
+//     (d0 is 0.0) x
+//     (ksi is 1.2) x
+//     (y0 is 0.2)x
+//     (sar is 0.25) x
+//     (Tab is 50.0) x
+//     (Tr is 5.0) x
+//     (Td is 50.0) x
+//     (d is 1.0) x
+//     (dtsave is 1.0) x
+//     (a0 in (0.0 to 1.0 by 0.01)) x
+//     (w in Seq(0.0,1.0,2.0,4.0)),
+// )
+//
+// // end of longterm sampling for clustering2
+// //////////////////////////////////////////
+//
+// /////////////////////////////////////////////
+// // begin of ci conditions for figure 4
+// val setParamA0Exp=ScalaTask("""
+//     val ksi = 1.2
+//     val sar = 0.25
+//     val a = 0.9
+//     val w = 8.0
+//     val Tag = 0.1
+//     val Tab = 50.0
+//     val Tr = 5.0
+//     val Td = 50.0
+//     val d = 1.0
+//     val T = 2000.0
+//     val dtp = 0.1
+//     val L = 40.0
+//     val d0 = 0.0
+//     val dtsave = 1.0
+//     // create a file with a header consisting of all the model macro outputs
+//     val f = newFile()
+//     f.content = "t P N D A0 A1 Y nFrag meanSize stdSize maxSize meanES stdES connectance nMax nMin pMax pMin ripleyN ripleyD ripleyA0 ripleyA1\n"
+// """) set(
+//     inputs += a0,
+//     outputs +=(f,T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave)
+// )
+// // use this function to get all the data across time stored
+// val replicationsA0 =
+//   Replication(
+//     evaluation = scriptTask hook hookAppend on env,
+//     seed = mySeed,
+//     sample = 20
+//   )
+// val a0Exploration = ExplorationTask( a0 in Seq(0.6,0.7,0.8,0.9,1.0) )
+// // end of figure4
+// /////////////////////////////////////////////
+//
+// /////////////////////////////////////////////
+// // directsampling for irreversible collapse figure4
+//
+// val readFinalState =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val N = valuesAgre(2).toDouble
+//     val P = valuesAgre(1).toDouble
+//     val nMax = valuesAgre(14).toDouble
+//     val nMin = valuesAgre(15).toDouble
+//     val pMax = valuesAgre(16).toDouble
+//     val pMin = valuesAgre(17).toDouble
+//     val maxSize = valuesAgre(10).toDouble
+//     val meanSize = valuesAgre(8).toDouble
+//     val stdSize = valuesAgre(9).toDouble
+//     val nFrag = valuesAgre(7).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+//         outputs+=(N,P,nMax,nMin,pMax,pMin,maxSize,meanSize,stdSize,nFrag)
+//     )
+//
+// val finalStateTask = MoleTask(scriptTask -- readFinalState)
+//
+// val replicationsFinalState=
+//   Replication(
+//     evaluation = finalStateTask,
+//     seed = mySeed,
+//     sample = 20,
+//     aggregation = Seq (
+//       T aggregate average,
+//       dtp aggregate average,
+//       L aggregate average,
+//       a0 aggregate average,
+//       d0 aggregate average,
+//       ksi aggregate average,
+//       sar aggregate average,
+//       a aggregate average,
+//       w aggregate average,
+//       Tag aggregate average,
+//       Tab aggregate average,
+//       Tr aggregate average,
+//       Td aggregate average,
+//       d aggregate average,
+//       dtsave aggregate average,
+//       mySeed aggregate average,
+//       N,
+//       P,
+//       nMin,
+//       nMax,
+//       pMin,
+//       pMax,
+//       maxSize,
+//       meanSize,
+//       stdSize,
+//       nFrag)
+//   )
+//
+// val longTerm4  =
+//   DirectSampling(
+//     evaluation = replicationsFinalState on env,
+//     sampling =
+//       (T is 2000.0) x
+//       (dtp is 0.1) x
+//       (L is 40.0) x
+//       (Tag is 0.1) x
+//       (d0 is 0.0) x
+//       (ksi is 1.2) x
+//       (sar is 0.25) x
+//       (Tab is 50.0) x
+//       (Tr is 5.0) x
+//       (Td is 50.0) x
+//       (d is 1.0) x
+//       (dtsave is "T") x
+//       (a0 in (0.1 to 0.9 by 0.1)) x
+//       (a in (0.0 to 1.0 by 0.1)) x
+//       (w in (0.0 to 8.0 by 1.0)),
+//   )
+//
+// /////////////////////////////////////////////
+// // ose for irreversible collapse figure4
+//
+// // val readFinalStateOSE =
+// //     ScalaTask("""
+// //     // read file as an array of lines and get last line
+// //     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+// //     // split the string and store it in an array
+// //     val valuesAgre = lastLineAgre.split(" ")
+// //
+// //     val N = valuesAgre(2).toDouble
+// //     val P = valuesAgre(1).toDouble
+// //     """
+// //
+// //     )set(
+// //         inputs+=agreOut,
+// //         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+// //         outputs+=(N,P)
+// //     )
+// //
+// // val finalStateOSE = MoleTask(scriptTask -- readFinalStateOSE)
+// //
+// // val a0Exploration2 = ExplorationTask( a0 in Seq(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9) )
+// //
+// // val a0OSE = OSEEvolution(
+// //   evaluation = finalStateOSE on env,
+// //   parallelism = 40,
+// //   termination = 100,
+// //   origin = Seq(
+// //     a0 is a0,
+// //     a in (0.0 to 1.0 by 0.1),
+// //     w in (0.0 to 8.0 by 1.0)),
+// //   objective = Seq(
+// //     P under 10.0,
+// //     N under 0.01),
+// //   stochastic = Stochastic(seed = mySeed, reevaluate = 0.2, sample = 10),
+// // )
+//
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// // directsampling for final state in the absence of population as a function of landscape initial composition
+//
+// val readFinalStateNoPop =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val N = valuesAgre(2).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,y0,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+//         outputs+=(N)
+//     )
+//
+// val finalStateTaskNoPop = MoleTask(scriptTask -- readFinalStateNoPop)
+//
+// val replicationsFinalStateNoPop=
+//   Replication(
+//     evaluation = finalStateTaskNoPop,
+//     seed = mySeed,
+//     sample = 20,
+//     aggregation = Seq (
+//       T aggregate average,
+//       dtp aggregate average,
+//       L aggregate average,
+//       a0 aggregate average,
+//       d0 aggregate average,
+//       ksi aggregate average,
+//       y0 aggregate average,
+//       sar aggregate average,
+//       a aggregate average,
+//       w aggregate average,
+//       Tag aggregate average,
+//       Tab aggregate average,
+//       Tr aggregate average,
+//       Td aggregate average,
+//       d aggregate average,
+//       dtsave aggregate average,
+//       mySeed aggregate average,
+//       N aggregate average
+//       )
+//   )
+//
+// val longTermNoPop =
+//   DirectSampling(
+//     evaluation = replicationsFinalStateNoPop on env,
+//     sampling =
+//       (T is 6000.0) x
+//       (dtp is "T") x
+//       (L is 40.0) x
+//       (Tag is 1.0) x
+//       (a0 is 0.0) x
+//       (a is 0.0) x
+//       (w is 0.0) x
+//       (y0 is 0.0) x
+//       (ksi is 0.0) x
+//       (Tab is 50.0) x
+//       (Td is 1.0) x
+//       (d is 1.0) x
+//       (dtsave is "T") x
+//       (d0 in (0.0 to 1.0 by 0.1)) x
+//       (sar in Seq(0.0,0.125)) x
+//       (Tr in LogRange(0.01,1.0,20)),
+//   )
+//
+//
+// ///////////////////////////////////////////////////////////////////////////////////
+// // begin of exploration with otherrange values for processes compared to demography
+//
+// val setParamExplo=ScalaTask("""
+//     val ksi = 1.2
+//     val sar = 0.25
+//     val y0 = 0.2
+//     val a = 0.0
+//     val w = 0.0
+//     val Tag = 0.1
+//     val Tab = 50.0
+//     val Tr = 5.0
+//     val Td = 50.0
+//     val d = 1.0
+//     val T = 2000.0
+//     val dtp = 0.1
+//     val L = 40.0
+//     val d0 = 0.0
+//     val a0 = 0.2
+//     val dtsave = 1.0
+//     // create a file with a header consisting of all the model macro outputs
+//     val f = newFile()
+//     f.content = "t P N D A0 A1 Y nFrag meanSize stdSize maxSize meanES stdES connectance nMax nMin pMax pMin ripleyN ripleyD ripleyA0 ripleyA1\n"
+// """) set(
+//     outputs +=(f,T,dtp,L,a0,d0,ksi,sar,y0,a,w,Tag,Tab,Tr,Td,d,dtsave)
+// )
+// // use this function to get all the data across time stored
+// val replicationsExplo =
+//   Replication(
+//     evaluation = scriptTask hook hookAppend on env,
+//     seed = mySeed,
+//     sample = 20
+//   )
+// // end of perco zoom fig 2
+// ///////////////////////////////////////////
+//
+// //////////////////////////////////////////
+// // begin percolation measure sampling to get correlation length and radius of gyration as a function of omega and N
+//
+// val readFinalStatePercoMeasure =
+//     ScalaTask("""
+//     // read file as an array of lines and get last line
+//     val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+//     // split the string and store it in an array
+//     val valuesAgre = lastLineAgre.split(" ")
+//
+//     val N = valuesAgre(2).toDouble
+//     val meanES = valuesAgre(11).toDouble
+//     val stdES = valuesAgre(12).toDouble
+//     val meanR = valuesAgre(22).toDouble
+//     val stdR = valuesAgre(23).toDouble
+//     val corrLen = valuesAgre(24).toDouble
+//     """
+//
+//     )set(
+//         inputs+=agreOut,
+//         (inputs, outputs)+=(T,dtp,L,a0,d0,ksi,y0,sar,a,w,Tag,Tab,Tr,Td,d,dtsave,mySeed),
+//         outputs+=(N,meanES,stdES,meanR,stdR,corrLen)
+//     )
+//
+// val finalStatePercoMeasureTask = MoleTask(scriptTask -- readFinalStatePercoMeasure)
+//
+// val replicationsFinalStatePercoMeasure =
+//   Replication(
+//     evaluation = finalStatePercoMeasureTask,
+//     seed = mySeed,
+//     sample = 20,
+//     aggregation = Seq (
+//       T aggregate average,
+//       dtp aggregate average,
+//       L aggregate average,
+//       a0 aggregate average,
+//       d0 aggregate average,
+//       ksi aggregate average,
+//       y0 aggregate average,
+//       sar aggregate average,
+//       a aggregate average,
+//       w aggregate average,
+//       Tag aggregate average,
+//       Tab aggregate average,
+//       Tr aggregate average,
+//       Td aggregate average,
+//       d aggregate average,
+//       dtsave aggregate average,
+//       mySeed aggregate average,
+//       N aggregate average,
+//       meanES aggregate average,
+//       stdES aggregate average,
+//       meanR aggregate average,
+//       stdR aggregate average,
+//       corrLen aggregate average)
+//   )
+//
+// val samplingPercoMeasure =
+// DirectSampling(
+//   evaluation = replicationsFinalStatePercoMeasure on env,
+//   sampling =
+//     (T is 0.0) x
+//     (dtp is 0.1) x
+//     (L is 100.0) x
+//     (a is 40.0) x
+//     (Tag is 0.1) x
+//     (d0 is 0.0) x
+//     (ksi is 1.2) x
+//     (y0 is 0.2)x
+//     (sar is 0.25) x
+//     (Tab is 50.0) x
+//     (Tr is 5.0) x
+//     (Td is 50.0) x
+//     (d is 1.0) x
+//     (dtsave is 1.0) x
+//     (a0 in (0.01 to 0.99 by 0.01)) x
+//     (w in Seq(0.0,1.0,2.0,4.0)),
+// )
+//
+// // end of longterm sampling for clustering2
+// //////////////////////////////////////////
+//
+//
+// // a0Exploration2 -< ( a0OSE hook (workDirectory / "resultsOSE") )
+// longTerm4 hook (workDirectory / "experiment4-010521.csv")
+// // longTermNoPop hook (workDirectory / "experimentNoPop-2-140521.csv")
+// // a0Exploration -< (setParamA0Exp hook copyHook) -- replicationsA0
+// // clusteringExploration -< (setParamClusteringExp hook copyHook) -- replicationsClustering
+// // intensificationExploration -< (setParamIntenseExp hook copyHook) -- replicationsIntensification
+// // (setParamZoomPerco hook copyHook) -- replicationsZoomPerco
+// // longTermIntensification hook (workDirectory / "experimentTagA-290421-2Dbif-3.csv")
+// // longTermClustering hook (workDirectory / "experimentTagW-280421.csv")
+// // longTermClustering2 hook (workDirectory / "experimentA0W-220421.csv")
+//
+// samplingPercoMeasure hook (workDirectory / "experimentPercoMeasure-280521.csv")
+//
+// // (setParamExplo hook copyHook) -- replicationsExplo

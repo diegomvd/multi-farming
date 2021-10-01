@@ -1,0 +1,91 @@
+/*
+This script launches a 3D sampling on the alpha, nF, dES space to explore the effects of land-use
+strategy and spatial scale on P, N and maxFragSize/N
+*/
+
+// Import the model plugin
+import _file_.modelDeclaration._
+
+val P = Val[Double]
+val N = Val[Double]
+// val D = Val[Double]
+// val Al = Val[Double]
+// val Ah = Val[Double]
+// val maxN = Val[Double]
+// val edge2Area = Val[Double]
+// val corrLen = Val[Double]
+// val meanES = Val[Double]
+// val giniES = Val[Double]
+// val moranI = Val[Double]
+val Pstd = Val[Double]
+val Nstd = Val[Double]
+
+val eukaryoteEnvironment = LocalEnvironment(40)
+
+val readModelOutput =
+    ScalaTask("""
+    // read file as an array of lines and get last line
+    val lastLine = scala.io.Source.fromFile(output).getLines.toList.last.mkString
+    // split the string and store it in an array
+    val values = lastLine.split(" ")
+    val P = values(1).toDouble
+    val N = values(2).toDouble
+    // val D = values(3).toDouble
+    // val Al = values(4).toDouble
+    // val Ah = values(5).toDouble
+    // val maxN = values(8).toDouble
+    // val edge2Area = values(9).toDouble
+    // val corrLen = values(10).toDouble
+    // val meanES = values(11).toDouble
+    // val giniES = values(12).toDouble
+    // val moranI = values(13).toDouble
+    """
+    )set(
+        inputs+=output,
+        (inputs, outputs)+=(a,nF,dES),
+        outputs+=(P,N) //,D,Al,Ah,maxN,edge2Area,corrLen,meanES,giniES,moranI)
+    )
+
+val modelRunAndRead = MoleTask(modelPluginEuka -- readModelOutput)
+//
+// val replications =
+//   Replication(
+//     evaluation = modelRunAndRead,
+//     seed = mySeed,
+//     sample = 10,
+//     aggregation = Seq (
+//       a aggregate average,
+//       nF aggregate average,
+//       dES aggregate average,
+//       P aggregate average,
+//       N aggregate average,
+//       // D aggregate average,
+//       // Al aggregate average,
+//       // Ah aggregate average,
+//       // maxN aggregate average,
+//       // edge2Area aggregate average,
+//       // corrLen aggregate average,
+//       // meanES aggregate average,
+//       // giniES aggregate average,
+//       // moranI aggregate average,
+//       P aggregate meanSquaredError as Pstd,
+//       N aggregate meanSquaredError as Nstd)
+//   )
+
+val replications =
+    Replication(
+      evaluation = modelRunAndRead,
+      seed = mySeed,
+      sample = 20
+    )
+
+val sampling =
+  DirectSampling(
+    evaluation = replications,
+    sampling =
+      (a in Seq(0.0,0.5,1.0) )x
+      (nF in Seq(2.0,4.0,8.0,16.0,32.0,64.0,128.0,256.0,512.0,1024.0) )x
+      (dES in Seq(1.0,2.0,3.0,4.0,8.1,16.1) ),
+  )
+
+(sampling on eukaryoteEnvironment hook (workDirectory / "experimentAlphaScale-130921.csv") )

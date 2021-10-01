@@ -1,0 +1,135 @@
+// to execute from the command line: openmole -s samplingLandMetrics.oms
+
+// output files
+val agreOut = Val[File]
+val f = Val[File]
+
+// random number generator seed
+val mySeed = Val[Int]
+
+// model parameters
+val ksi = Val[Double]
+val y0 = Val[Double]
+val sar = Val[Double]
+val a = Val[Double]
+val w = Val[Double]
+val Tag = Val[Double]
+val Tab = Val[Double]
+val Tr = Val[Double]
+val Td = Val[Double]
+val d = Val[Double]
+val mdc = Val[Double]
+val ndc = Val[Double]
+
+// simulation parameters
+val T = Val[Double]
+val dtp = Val[Double]
+val L = Val[Double]
+val d0 = Val[Double]
+val a0 = Val[Double]
+val dtsave = Val[Double]
+
+// variable outputs
+val meanES = Val[Double]
+val giniES = Val[Double]
+val avgDistance = Val[Double]
+val stdDistance = Val[Double]
+
+///////////////////////////////////////////////////////////////////////////////
+// 1- MODEL PLUGIN AS AN EXECUTABLE FILE
+///////////////////////////////////////////////////////////////////////////////
+
+val scriptTask =
+  SystemExecTask(
+    command = Seq(
+      "./alumss-exec ${T} ${dtp} ${L} ${a0} ${d0} ${ksi} ${y0} ${sar} ${a} ${w} ${Tag} ${Tab} ${Tr} ${Td} ${d} ${mdc} ${ndc} ${dtsave} ${mySeed} "),
+    )set(
+      (inputs, outputs) += (T,dtp,L,a0,d0,ksi,y0,sar,a,w,Tag,Tab,Tr,Td,d,mdc,ndc,dtsave,mySeed),
+
+      // outputFiles is the path to the file containing the model outputs
+      // outputFiles += ("DATA_AGRE_T_${T}_dtp_${dtp}_n_${L}_a0_${a0}_d0_${d0}_ksi_${ksi}_y0_${y0}_sar_${sar}_a_${a}_w_${w}_Tag_${Tag}_Tab_${Tab}_Tr_${Tr}_Td_${Td}_d_${d}_dtsave_${dtsave}_expid_${mySeed}.dat",agreOut),
+      outputFiles += ("DATA_OUT",agreOut),
+      // resources is the path to the executable that runs the simulations
+      resources+="/home/AD.LSM.CNRS.FR/diego.bengochea-paz/ALUMSS/ALUMSS/alumss-exec",
+      // resources+="/home/karpouzi/Research/Chapter2/gillespie-land-use/alumss-exec",
+
+      // default parameter and initialization values
+      T:=0.0,
+      dtp:=0.1,
+      L:=100,
+      a0:=0.2,
+      d0:=0.0,
+      ksi:=1.2,
+      y0:=0.2,
+      sar:=0.25,
+      a:=0.0,
+      w:=0.0,
+      Tag:=0.1,
+      Tab:=50.0,
+      Tr:=5.0,
+      Td:=50.0,
+      d:=1.0,
+      mdc:=1.1,
+      ndc:=1.1,
+      dtsave:=4000.0,
+      mySeed:=1111
+    )
+
+///////////////////////////////////////////////////////////////////////////////
+// 2- ENVIRONMENT SETUP: USE 40 LOCAL CORES
+///////////////////////////////////////////////////////////////////////////////
+
+val env = LocalEnvironment(40)
+
+///////////////////////////////////////////////////////////////////////////////
+// 4 - DECLARATION OF NUMERICAL EXPERIMENTS
+//////////////////////////////////////////////////////////////////////////////
+
+// direct sampling for bifurcation diagram as a function of ndc
+
+val readOutputFile =
+    ScalaTask("""
+    // read file as an array of lines and get last line
+    val lastLineAgre = scala.io.Source.fromFile(agreOut).getLines.toList.last.mkString
+    // split the string and store it in an array
+    val valuesAgre = lastLineAgre.split(" ")
+
+    val meanES = valuesAgre(0).toDouble
+    val giniES = valuesAgre(1).toDouble
+    val avgDistance = valuesAgre(2).toDouble
+    val stdDistance = valuesAgre(3).toDouble
+    """
+
+    )set(
+        inputs+=agreOut,
+        (inputs, outputs)+=(a0,w,ndc),
+        outputs+=(meanES,giniES,avgDistance,stdDistance)
+    )
+
+val runAndRead = MoleTask(scriptTask -- readOutputFile)
+
+val replicationsLongTerm =
+  Replication(
+    evaluation = runAndRead,
+    seed = mySeed,
+    sample = 10,
+    aggregation = Seq (
+      w aggregate average,
+      ndc aggregate average,
+      a0 aggregate average,
+      meanES aggregate average,
+      giniES aggregate average,
+      avgDistance aggregate average,
+      stdDistance aggregate average)
+  )
+
+val longTermSampling =
+DirectSampling(
+  evaluation = replicationsLongTerm,
+  sampling =
+    (ndc in Seq(1.1,2.1,3.1,4.1,5.1,6.1,7.1,8.1,9.1,10.1))x
+    (w in Seq(0.0,1.0,2.0,4.0))x
+    (a0 in (0.1 to 0.9 by 0.05)),
+)
+
+longTermSampling on env hook (workDirectory / "experimentESMetricsNDC-130621.csv")

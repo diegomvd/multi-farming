@@ -1,0 +1,72 @@
+/*
+This script launches a 3D sampling on the alpha, nF, dES space to explore the effects of land-use
+strategy and spatial scale on P, N and maxFragSize/N
+*/
+
+// Import the model plugin
+import _file_.modelDeclaration._
+
+val N = Val[Double]
+val maxN = Val[Double]
+val edge2Area = Val[Double]
+val corrLen = Val[Double]
+val meanES = Val[Double]
+val giniES = Val[Double]
+val moranI = Val[Double]
+
+val eukaryoteEnvironment = LocalEnvironment(40)
+
+val readModelOutput =
+    ScalaTask("""
+    // read file as an array of lines and get last line
+    val lastLine = scala.io.Source.fromFile(output).getLines.toList.last.mkString
+    // split the string and store it in an array
+    val values = lastLine.split(" ")
+    val N = values(2).toDouble
+    val maxN = values(8).toDouble
+    val edge2Area = values(9).toDouble
+    val corrLen = values(10).toDouble
+    val meanES = values(11).toDouble
+    val giniES = values(12).toDouble
+    val moranI = values(13).toDouble
+    """
+    )set(
+        inputs+=output,
+        (inputs, outputs)+=(a,nF,a0,L),
+        outputs+=(N,maxN,edge2Area,corrLen,meanES,giniES,moranI)
+    )
+
+val modelRunAndRead = MoleTask(modelPluginEuka -- readModelOutput)
+
+val replications =
+  Replication(
+    evaluation = modelRunAndRead,
+    seed = mySeed,
+    sample = 100,
+    aggregation = Seq (
+        a aggregate average,
+        nF aggregate average,
+        a0 aggregate average,
+        L aggregate average,
+        N aggregate average,
+        maxN aggregate average,
+        edge2Area aggregate average,
+        corrLen aggregate average,
+        meanES aggregate average,
+        giniES aggregate average,
+        moranI aggregate average)
+  )
+
+val sampling =
+  DirectSampling(
+    evaluation = replications,
+    sampling =
+      (T is 0.0)x
+      (L is 40.0)x
+      (a in Seq(0.0,1.0) )x
+      (dES in Seq(1.1,2.1,3.1))x
+      (nF in Seq(1.0,1024.0) )x
+      (a0 in (0.01 to 0.99 by 0.01) ),
+  )
+
+(sampling on eukaryoteEnvironment hook (workDirectory / "experimentPercThreshold-080921-2.csv") )

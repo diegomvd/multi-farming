@@ -1,0 +1,87 @@
+/*
+Model Plugin for OpenMole exploration
+*/
+
+
+// Declaration of the model parameters
+val T = Val[Double]
+val L = Val[Double]
+val a0 = Val[Double]
+val d0 = Val[Double]
+val nF = Val[Double]
+val a = Val[Double]
+val mS = Val[Double]
+val wS = Val[Double]
+val z = Val[Double]
+val dES = Val[Double]
+val ye = Val[Double]
+val k0 = Val[Double]
+val sFL = Val[Double]
+val sR = Val[Double]
+val sD = Val[Double]
+val dtSave = Val[Double]
+// Seed for the RNG
+val mySeed = Val[Int]
+// Output file for the model's simulations
+val output = Val[File]
+
+val modelPluginLocal =
+  SystemExecTask(
+    command = Seq(
+      "./alumss-exec ${T} ${L} ${a0} ${d0} ${nF} ${a} ${mS} ${wS} ${z} ${dES} ${ye} ${k0} ${sFL} ${sR} ${sD} ${dtSave} ${mySeed}"
+    ),
+  )set(
+    (inputs, outputs) += (T,L,a0,d0,nF,a,mS,wS,z,dES,ye,k0,sFL,sR,sD,dtSave,mySeed),
+    outputFiles += ("output.dat",output),
+    resources += "/home/karpouzi/Research/Chapter2/ALUMSS/alumss-exec",
+
+    // default parameter and initialization values
+    T:=2000.0,
+    L:=40,
+    a0:=0.1,
+    d0:=0.1,
+    nF:=1.0,
+    a:=0.0,
+    mS:=0.5,
+    wS:=0.0,
+    z:=0.25,
+    dES:=1.1,
+    ye:=0.5,
+    k0:=10.0,
+    sFL:=0.01,
+    sR:=0.1,
+    sD:=0.01,
+    dtSave:=3000.0,
+    mySeed:=21358495
+  )
+
+val modelPluginEuka =
+  SystemExecTask(
+    command = Seq(
+      "./alumss-exec ${T} ${L} ${a0} ${d0} ${nF} ${a} ${mS} ${wS} ${z} ${dES} ${ye} ${k0} ${sFL} ${sR} ${sD} ${dtSave} ${mySeed} "
+    ),
+  )set(
+    (inputs, outputs) += (T,L,a0,d0,nF,a,mS,wS,z,dES,ye,k0,sFL,sR,sD,dtSave,mySeed),
+
+    outputFiles += ("output.dat",output),
+    resources+= "/home/AD.LSM.CNRS.FR/diego.bengochea-paz/multi-farming/ALUMSS/alumss-exec",
+
+    // default parameter and initialization values
+    T:=2000.0,
+    L:=40,
+    a0:=0.2,
+    d0:=0.0,
+    nF:=1.0,
+    a:=0.0,
+    mS:=1.2,
+    wS:=0.0,
+    z:=0.25,
+    dES:=1.1,
+    ye:=0.5,
+    k0:=15.0,
+    sFL:=0.01,
+    sR:=0.1,
+    sD:=0.01,
+    dtSave:=3000.0,
+    mySeed:=21358495
+  )

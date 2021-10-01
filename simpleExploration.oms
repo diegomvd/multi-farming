@@ -1,0 +1,64 @@
+/*
+Replications of temporal dynamics of the social-ecological system
+*/
+
+// Import the model plugin
+import _file_.modelDeclaration._
+
+// File to store the outputs from all the different replications
+val f = Val[File]
+
+// Definition of the environments
+val myPCEnvironment = LocalEnvironment(4)
+val eukaryoteEnvironment = LocalEnvironment(5)
+
+// Definition of hooks to name the data file and fill it with data from several replications
+val copyHook = CopyFileHook(f,workDirectory/"explo_T_${T}_n_${L}_a0_${a0}_d0_${d0}_nF_${nF}_a_${a}_mS_${mS}_wS_${wS}_z_${z}_dES_${dES}_y0_${y0}_y1_${y1}_sFL_${sFL}_sR_${sR}_sD_${sD}_dtSave_${dtSave}.csv" )
+val hookAppend = AppendToFileHook(workDirectory/"explo_T_${T}_n_${L}_a0_${a0}_d0_${d0}_nF_${nF}_a_${a}_mS_${mS}_wS_${wS}_z_${z}_dES_${dES}_y0_${y0}_y1_${y1}_sFL_${sFL}_sR_${sR}_sD_${sD}_dtSave_${dtSave}.csv", "${output.content}")
+
+// Creation of a file to store the data from the replications
+val createFile = ScalaTask("""
+  val f = newFile()
+  f.content = "t P N D A0 A1 Y nFrag maxSize e2a corrLen meanES giniES\n"
+""") set(
+    (inputs,outputs)+=(T,L,a0,d0,nF,a,mS,wS,z,dES,y0,y1,sFL,sR,sD,dtSave),
+    outputs+=f
+)
+
+// Definition of parameter values for the replication experiment
+val setParameters = ScalaTask("""
+  val T = 1500.0
+  val L = 40.0
+  val a0 = 0.15
+  val d0 = 0.15
+  // val nF = 200.0
+  val a = 1.0
+  val mS = 0.6
+  val wS = 0.0
+  val z = 0.25
+  val dES = 1.1
+  val y0 = 0.2
+  val y1 = 1.2
+  val sFL = 0.02
+  val sR = 0.2
+  val sD = 0.02
+  val dtSave = 1.0
+""") set(
+    inputs += nF,
+    outputs += (T,L,a0,d0,nF,a,mS,wS,z,dES,y0,y1,sFL,sR,sD,dtSave)
+)
+
+// Definition of the replication experiment with number 1 sample
+val replicationDynamics = Replication(
+  evaluation = modelPluginEuka hook hookAppend on eukaryoteEnvironment,
+  seed = mySeed,
+  sample = 1
+)
+
+// Definition of the values for the exploration
+val explorationNF = ExplorationTask(
+  nF in Seq(1.0,10.0,100.0,250.0,1000.0)
+)
+
+// Workflow
+explorationNF -< setParameters -- (createFile hook copyHook) -- replicationDynamics

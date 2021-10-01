@@ -1,0 +1,62 @@
+// Import the model plugin
+import _file_.modelDeclaration._
+
+val nFrag = Val[Double]
+val maxSize = Val[Double]
+val edgeToArea = Val[Double]
+val meanES = Val[Double]
+val giniES = Val[Double]
+val natFraction = Val[Double]
+
+val eukaryoteEnvironment = LocalEnvironment(40)
+
+val readModelOutput =
+    ScalaTask("""
+    // read file as an array of lines and get last line
+    val lastLine = scala.io.Source.fromFile(output).getLines.toList.last.mkString
+    // split the string and store it in an array
+    val values = lastLine.split(" ")
+    val nFrag = values(0).toDouble
+    val maxSize = values(1).toDouble
+    val edgeToArea = values(2).toDouble
+    val meanES = values(3).toDouble
+    val giniES = values(4).toDouble
+    val natFraction = values(5).toDouble
+    """
+    )set(
+        inputs+=output,
+        (inputs,outputs)+=(a0,nF),
+        outputs+=(nFrag,maxSize,edgeToArea,meanES,giniES,natFraction)
+    )
+
+// this exectues the model and reads the outputs to work on OpenMole
+val modelRunAndRead = MoleTask(modelPluginEuka -- readModelOutput)
+
+val replications = Replication(
+    evaluation = modelRunAndRead,
+    seed = mySeed,
+    sample = 10,
+    aggregation = Seq (
+      nFrag aggregate average,
+      maxSize aggregate average,
+      edgeToArea aggregate average,
+      meanES aggregate average,
+      giniES aggregate average,
+      natFraction aggregate average,
+      a0 aggregate average,
+      nF aggregate average
+    )
+  )
+
+val sampling2D = DirectSampling(
+  evaluation = replications,
+  sampling =
+    (T is 0.0) x
+    (L is 100.0) x
+    (d0 is 0.0) x
+    (a is 1.0) x
+    (a0 in (0.01 to 0.99 by 0.01 ))x
+    (nF in Seq(1.0,10.0,100.0,1000.0)),
+)
+
+(sampling2D on eukaryoteEnvironment hook (workDirectory / "sparingLandConfig-nF.csv"))
