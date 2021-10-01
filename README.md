@@ -1,1 +1,1 @@
-multi-farming
+This is an extension of the ALUMSS repository that allows for several farmers to manage the same landscape. Farms are created via a Voronoi tesselation of the landscape. Farms can apply either a land-sharing or land-sparing strategy. A parameter controls the number of farms, and the heterogeneity between farms' strategies.
