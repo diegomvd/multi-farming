@@ -88,11 +88,12 @@ val auto = Simulation()
 while(auto.hasNext) auto.update
 auto.find{landscape => ...}
 
-final case class Parameters(size:                         Int = 5,
+final case class Parameters(radius:                       Int = 5,
                             maxTime:                      Double = 1,
                             agriculturalFraction:         Double = 0.2,
                             degradedFraction:             Double = 0.1,
-                            nManagementUnits:             Int = 1,
+                            strategicScale:               Int = 1,
+                            managementScale:              Int = 1,
                             sparingFraction:              Double = 0.5,
                             sensitivityResourceDeficit:   Double = 1,
                             scalingExponentES:            Double = 0.2,
