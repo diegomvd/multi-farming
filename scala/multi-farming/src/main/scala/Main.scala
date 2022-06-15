@@ -84,9 +84,9 @@ class Simulation(time: Double,
   }
 }
 
-val auto = Simulation()
-while(auto.hasNext) auto.update
-auto.find{landscape => ...}
+val sim = Simulation()
+while(sim.hasNext) sim.update
+sim.find{landscape => ...}
 
 final case class Parameters(radius:                       Int = 5,
                             maxTime:                      Double = 1,

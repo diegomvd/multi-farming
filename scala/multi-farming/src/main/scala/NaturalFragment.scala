@@ -23,7 +23,7 @@ case class NaturalFragment(composition: Vector[EcologicalUnit], es_supply: Doubl
 
 case class NaturalFragments(composition: ParSet[ParSet[EcologicalUnit]]){
 
-  def updateAdd(unit: EcologicalUnit,radius: Int, threshold: Int) = NaturalFragments {
+  def updateAdd(unit: EcologicalUnit, radius: Int, threshold: Int) = NaturalFragments {
     val natural_neighbors = unit.manhattanNeighbors(radius,threshold).filter( _.cover == "Natural" )
     natural_neighbors.size() match {
       case 0 => val new_composition = this.composition.incl(ParSet(unit))
@@ -40,9 +40,17 @@ case class NaturalFragments(composition: ParSet[ParSet[EcologicalUnit]]){
     copy(new_composition)
   }
 
-  def updateRmv(unit: EcologicalUnit) = NaturalFragments {
-
-
+  def updateRmv(unit: EcologicalUnit, radius: Int, threshold: Int) = NaturalFragments {
+    val natural_neighbors = unit.manhattanNeighbors(radius,threshold).filter( _.cover == "Natural" )
+    natural_neighbors.size() match {
+      case 0 => val new_composition = this.composition.excl(ParSet(unit))
+      case 1 => {
+        val new_composition = this.composition.map( case frag if frag.exists(natural_neighbors.contains(_))) => frag.excl(unit) )
+      }
+      case _ => {
+        natural_neighbors.toSet.subsets(2).collect{ case(u1,u2) if u1.isNeighbor(u2) => ParSet(u1,u2)}
+      }
+    }
 
   }
 

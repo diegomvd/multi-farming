@@ -1,4 +1,4 @@
-case class EcologicalUnit(pos: PosModuloHex, cover: String = "Natural", es_inflow: Double){
+case class EcolUnit(pos: ModuloCoord, neighbors: Vector[ModuloCoord], cover: String = "Natural", es_inflow: Double){
 
   def recoveryPropensity(es_inflow: Double) = Double {
     this.cover match {

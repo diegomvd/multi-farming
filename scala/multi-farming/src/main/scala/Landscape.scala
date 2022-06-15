@@ -29,8 +29,23 @@ object Landscape {
   def buildNaturalFragments(pristine_composition: ParMap[PosModuloHex, EcologicalUnit]): ParSet[NaturalFragment] =
     ParSet( NaturalFragment(pristine_composition.values().toVector) )
 
+  def chooseStrategy(sparingFraction: Double) = String {
+    sparingFraction >= rnd.nextDouble() match {
+      case true => "Sparing"
+      case false => "Sharing"
+    }
+  }
 
-  def buildStrategicUnits()
+  def initStrategy(n_units: Int, sparingFraction: Double) = Map[Int, String] {
+    (0 <- n_units).map{ _ -> chooseStrategy(sparingFraction) }.toMap
+  }
+
+  // to practical effects I only need to associate a position with a strategy. And I know for a fact that strategic units are voronoi tesselation
+  // However for the future it can be nice to have an actual Strategic Units object
+  def buildStrategicUnits(n_units: Int, radius: Int, sparingFraction: Double) = ParMap[PosModuloHex, String] {
+    val strategies = initStrategy(n_units, sparingFraction)
+    VoronoiUtils.voronoiTesselation(n_units, radius).map{ (pos,id) => pos -> strategies.get(id) }.toMap.par
+  }
 
   def buildManagementUnits(radius: Int, management_scale: Double): // whatever voronoi inside strategic
 
