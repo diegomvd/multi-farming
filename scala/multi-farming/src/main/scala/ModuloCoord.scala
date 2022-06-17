@@ -1,4 +1,4 @@
-final case class PosModuloHex(m: Int){
+final case class ModuloCoord(m: Int){
 
   def toCubicHex(radius: Int) = PosCubicHex {
     // helper values
@@ -15,7 +15,7 @@ final case class PosModuloHex(m: Int){
     PosCubicHex(q,r,s)
   }
 
-  def manhattanNeighbors(radius: Int, threshold: Int) = List[PosModuloHex] {
+  def manhattanNeighbors(radius: Int, threshold: Int) = List[ModuloCoord] {
 
     val posCubicHex = this.toCubicHex(radius)
 
@@ -29,11 +29,11 @@ final case class PosModuloHex(m: Int){
 
 }
 
-object PosModuloHex{
+object ModuloCoord{
 
-  def apply(radius: Int)= Vector[PosModuloHex] {
+  def apply(radius: Int)= Vector[ModuloCoord] {
    val area = 3 * radius * radius + 3 * radius + 1
-   (0 until area).map(PosModuloHex(_)).toVector
+   (0 until area).map(ModuloCoord(_)).toVector
   }
 
 }

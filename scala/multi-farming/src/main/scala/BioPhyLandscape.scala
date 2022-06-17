@@ -1,58 +1,76 @@
 import scalax.collection.Graph
 import scalax.collection.GraphPredef._, scalax.collection.GraphEdge._
 
-case class Landscape(biophysical: ParMap[ModuloCoord, EcoUnit], management:  )
+case class BioPhyLandscape(radius: Int, composition: ParMap[ModuloCoord, EcoUnit]){
 
-
-case class BioPhyLandscape(composition : ParVector[EcoUnit], structure: Graph[ModuloCoord,UnDiEdge]){
-
-  def neighbors(unit: EcoUnit) = Vector[EcoUnit] {
-
+  def recoveryPropensity() = ParMap[ModuloCoord, Double]{
+    this.composition.map{
+        case (mc,eu) if eu.isDegraded() => eu.esInFlow// put the function here
+        case _ => mc -> 0.0
+      }
+    }.toMap.par
   }
+
+  def degradationPropensity() = ParMap[ModuloCoord, Double]{
+    this.composition.map{
+        case (mc,eu) if eu.isNatural() => eu.esInFlow // put the function here
+        case _ => mc -> 0.0
+      }
+    }.toMap.par
+  }
+
+  def fertilityLossPropensity() = ParMap[ModuloCoord, Double]{
+    this.composition.map{
+        case (mc,eu) if eu.isAgricultural() => eu.esInFlow // put the function here
+        case _ => mc -> 0.0
+      }
+    }.toMap.par
+  }
+
+  def update(unit: EcoUnit): BioPhyLandscape =
+    copy(this.radius, newComposition(unit,this.composition))
+
+  /**
+  Queries about the landscape's state
+  **/
+  def radius(): Int = this.radius
+  def fractionNatural():       Double = this.composition.count{ _._2.isNatural() }
+  def fractionDegraded():      Double = this.composition.count{ _._2.isDegraded() }
+  def fractionLowIntensity():  Double = this.composition.count{ _._2.isLowIntensity() }
+  def fractionHighIntensity(): Double = this.composition.count{ _._2.isHighIntensity() }
 
 }
 
 object BioPhyLandscape{
 
-  def buildComposition(radius: Int) = ParVector[EcoUnit] {
-    ModuloCoord.apply(radius).map( pos => EcoUnit(pos,"Natural") ).toVector.par
+  /**
+  This function builds the landscape's biosphysical composition and structure:
+  a collection of EcoUnits with each EcoUnit storing its neighborhood
+  **/
+  def buildBioPhyLandscape(radius: Int, threshold: Int) = ParMap[ModuloCoord, EcoUnit] {
+    ModuloCoord.apply(radius).map( pos => pos -> EcoUnit(pos,pos.manhattanNeighbors(radius,threshold),"Natural") ).toMap.par
   }
 
-  def buildStructure(radius: Int, threshold: Int) = Graph[ModuloCoord,UnDiEdge] {
-    val nodes = ModuloCoord.apply(radius).toList
-    val edges = nodes.toSet.subsets(2).collect{
-       case (coord1,coord2) if coord1.manhattanNeighbors(radius,threshold).exists(_ == coord2) UnDiEdge(coord1,coord2)
-    }.toList
-    Graph.from(nodes,edges)
+  /**
+  Return the new compositionof a BioPhyLandscape after updating ECoUnit unit
+  **/
+  def newComposition(unit: EcoUnit, composition: ParMap[ModuloCoord, EcoUnit]) = ParMap[ModuloCoord, EcoUnit] {
+    composition.map{ case (unit.coord(),_) => unit.coord() -> unit  }.toMap.par
   }
-
 }
 
-case class ManagementLandscape(composition: ParVector[ManagementUnit], structure: ParSet[ManagementRegion]){
 
-}
 
-object ManagementLandscape{
 
-  def buildComposition(n_units: Int, radius: Int) = ParVector[ManagementUnit] {
-    /**
-    After performing a Voronoi tesselation over EcoUnits positions, units
-    are grouped by voronoi cell id and and a ManagementUnit is initialized per
-    set of EcoUnits in the same voronoi cell.
-    Management unit composition should be a set of ecounits to facilitate look up
-    **/
-    val area = 3 * radius * radius + 3 * radius + 1
-    VoronoiUtils.voronoiTesselation(n_units,area).groupBy( _._2 ).map{
-      (key, val) => ManagementUnit(val.values.toSet, "None")
-    }.toVector.par
-  }
 
-  def buildStructure(n_regions: Int, n_units: Int) = ParSet[ManagementRegion] {
-    // beware, I need to generalize the voronoiUtils object so that not only positions
-    // are returned from the tesselation
-    VoronoiUtils.voronoiTesselation(n_regions,n_units).groupBy( _._2 ).map{
-      (key, val) => ManagementRegion(val.values.toSet, "None")
-    }.toSet.par
-  }
 
-}
+
+
+
+// def buildStructure(radius: Int, threshold: Int) = Graph[ModuloCoord,UnDiEdge] {
+//   val nodes = ModuloCoord.apply(radius).toList
+//   val edges = nodes.toSet.subsets(2).collect{
+//      case (coord1,coord2) if coord1.manhattanNeighbors(radius,threshold).exists(_ == coord2) UnDiEdge(coord1,coord2)
+//   }.toList
+//   Graph.from(nodes,edges)
+// }

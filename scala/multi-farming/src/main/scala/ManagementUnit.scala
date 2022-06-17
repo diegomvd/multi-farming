@@ -1,18 +1,18 @@
-case class ManagementUnit(composition: Set[EcoUnit], strategy: String){
+case class ManagementUnit(id: Int, composition: Set[Int], strategy: String){
 
-  def manhattanNeighbors(radius: Int, threshold: Int) = Vector[ManagementUnit] {
-    
-  }
+  def id = this.id
+  def composition = this.composition
+  def strategy = this.strategy
 
-  def isAvailable() = Bool {
-    if this.composition.exists( _.isCultivated() ) false
-    else true
-  }
+  def isAvailable(landscape: PlanningLandscape): Bool =
+    this.composition.exists{ landscape.available.contains(_) }
 
-  def conversionPropensity(resource_demand: Double) = Double {
-    this.isAvailable() match {
-      case true => // function here
-      case false => 0
-    }
-  }
+  def conversionPropensity(landscape: PlanningLandscape, total_propensity: Double): ParMap[Int,Double] =
+    landscape.conversionWeights(this.composition, this.strategy).map(_ * total_propensity).toMap.par
+
+}
+
+object ManagementUnit{
+
+
 }

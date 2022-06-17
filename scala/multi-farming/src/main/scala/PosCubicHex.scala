@@ -6,7 +6,7 @@ final case class PosCubicHex(q: Int, r: Int, s: Int){
 
   // This function returns the modulo hexagonal coordinate to define periodic
   // border conditions
-  def toModuloHex(radius: Int): PosModuloHex = {
+  def toModuloHex(radius: Int): ModuloCoord = {
     // helper values
     val area = 3 * radius * radius + 3 * radius + 1
     val shift = 3 * radius + 2
@@ -16,7 +16,7 @@ final case class PosCubicHex(q: Int, r: Int, s: Int){
     // obtain the modulo. Need to make sure this is right
     val m = ( (div % area) + area ) % area
 
-    PosModuloHex(m)
+    ModuloCoord(m)
   }
 
   // Returns all positions in the neighborhood of a position given the adjacency

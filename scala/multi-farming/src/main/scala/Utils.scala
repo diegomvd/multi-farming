@@ -1,22 +1,22 @@
 object VoronoiUtils{
 
-  def seedVoronoiTesselation(n_seeds: Int, radius: Int) = ParMap[PosModuloHex, Int]{
+  def seedVoronoiTesselation(n_seeds: Int, radius: Int) = ParMap[ModuloCoord, Int]{
     val area = 3 * radius * radius + 3 * radius + 1
-    (0 until n_seeds).flatMap(id => id -> PosModuloHex(rnd.nextInt(area))).toMap.par
+    (0 until n_seeds).flatMap(id => id -> ModuloCoord(rnd.nextInt(area))).toMap.par
   }
 
-  def voronoiProbability(radius: Int, cells: ParMap[PosModuloHex, Int]) = ParMap[PosModuloHex, Double] {
-    val non_norm_prob = PosModuloHex.apply(radius).map{
+  def voronoiProbability(radius: Int, cells: ParMap[ModuloCoord, Int]) = ParMap[ModuloCoord, Double] {
+    val non_norm_prob = ModuloCoord.apply(radius).map{
                           case pos if cells.exists((p,_)==(pos,_)) => pos -> 0.0
                           case pos if pos.manhattanNeighbors(radius,1).exists(p => cells.exists( _.contains(p) ) ) => pos -> 1.0
                           case other => pos -> 0.0
                         }.toMap.par
-    val total_prob = non_norm_prob.sum[Int >: (PosmoduloHex,Int)]( _._2 + _._2  )
-    non_norm_prob.map( case (pos, x) => pos -> x/total_prob)
+    val total_prob = non_norm_prob.sum[Int >: (ModuloCoord,Int)]( _._2 + _._2  )
+    non_norm_prob.map( case (pos, x) => pos -> x/total_prob).toMap.par
   }
 
   @annotation.tailrec
-  def voronoiRadialGrowth(radius: Int, cells: ParMap[PosModuloHex, Int]) = ParMap[PosModuloHex, Int]{
+  def voronoiRadialGrowth(radius: Int, cells: ParMap[ModuloCoord, Int]) = ParMap[ModuloCoord, Int]{
     val area = 3 * radius * radius + 3 * radius + 1
     if (cells.size() >= area) cells
     else{
@@ -27,19 +27,19 @@ object VoronoiUtils{
     }
   }
 
-  def voronoiTesselation(n_seeds: Int, radius: Int) = ParMap[PosModuloHex,Int]{
+  def voronoiTesselation(n_seeds: Int, radius: Int) = ParMap[ModuloCoord,Int]{
     VoronoiUtils.voronoiRadialGrowth(radius, VoronoiUtils.seedVoronoiTesselation(n_seeds,radius))
   }
 
 object S3Utils{ // utility functions for spatial stochastic simulations
 
-  def positionSelector(prob: ParMap[PosModuloHex, Double]) = PosModuloHex {
+  def positionSelector(prob: ParMap[ModuloCoord, Double]) = ModuloCoord {
     // one liner to get the position by ordering the map into a vector map
     val x_rand = rnd.nextDouble(1.0)
-    VectorMap(prob.toSeq.sortBy(_._1.m):_*).scanLeft[(PosModuloHex,Double)]((PosModuloHex(-1),0.0)){case ((_,acc),(pos,x)) => (pos, acc + x)}.find((_,x) => x_rand >= x)._1
+    VectorMap(prob.toSeq.sortBy(_._1.m):_*).scanLeft[(ModuloCoord,Double)]((ModuloCoord(-1),0.0)){case ((_,acc),(pos,x)) => (pos, acc + x)}.find((_,x) => x_rand >= x)._1
   }
 
-  def eventSelector(radius: Int, pos: PosModuloHex, events: ParMap[PosModuloHex, Int]) = Int {
+  def eventSelector(radius: Int, pos: ModuloCoord, events: ParMap[ModuloCoord, Int]) = Int {
     val potential_events = pos.manhattanNeighbors(radius,1).foldLeft(Vector[Int]())(case (allocated, p) => allocated :+ cells.get(p)).filter( _ != None )
     potential_events(rnd.nextInt(potential_events.size()))
   }
