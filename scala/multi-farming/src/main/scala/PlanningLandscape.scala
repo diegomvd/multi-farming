@@ -1,12 +1,14 @@
-case class PlanningLandscape(composition: ParMap[Int, PlanningUnit], base: BioPhyLandscape ){
+case class PlanningLandscape(composition: ParMap[Int, PlanningUnit]){
 
-  def available = ParVector[Int]{
-    this.composition.collect{ case (id, un) if un.isAvailable(this.base) => id }.toVector.par
+  def availableUnits(biocomp: ParMap[ModuloCoord,EcoUnit]) = ParVector[Int]{
+    this.composition.collect{ case (id, un) if un.isAvailable(biocomp) => id }.toVector.par
   }
 
-  def conversionWeights(units: Set[Int], strategy: String ) = ParMap[Int,Double] {
-    val propensity = this.composition.collect{
-      case units.contains(_._1) => _._1 -> _._2.conversionWeight(this.base,strategy)
+  def conversionWeights(units: Set[Int],
+                        strategy: String,
+                        biocomp: ParMap[ModuloCoord,EcoUnit]) = ParMap[Int,Double] {
+    val propensity = this.composition.collect{ case units.contains(_._1) =>
+       _._1 -> _._2.conversionWeight(biocomp,strategy)
     }.toMap.par
     val total_propensity = propensity.sum[Int :> (Int,Double)](_._2 + _._2)
     propensity.map( _._1 -> _._2/total_propensity )
@@ -17,38 +19,62 @@ case class PlanningLandscape(composition: ParMap[Int, PlanningUnit], base: BioPh
 object PlanningLandscape{
 
   /**
-  After performing a Voronoi tesselation over EcoUnits positions, units
-  are grouped by voronoi cell id and and a ManagementUnit is initialized per
-  set of EcoUnits in the same voronoi cell.
-  Management unit composition should be a set of ecounits to facilitate look up
-  **/
-  def buildComposition(n_units: Int, radius: Int) = ParMap[Int, PlanningUnit] {
-    VoronoiUtils.voronoiTesselation(n_units,radius).groupBy( _._2 ).map{
-      (key, val) => key -> PlanningUnit(key, val.values.toSet, Vector())
+  * This function is a preliminary computation of the planning landscape's
+  * composition.
+  *  TODO: abstract voronoiTesselation
+  *  @param n_units is the number of planning units to create
+  *  @param radius is the radius of the biophysical landscape
+  *  @return a map storing the id and composition of each planning unit
+  */
+  def prepareComposition(n_units: Int, radius: Int) = ParMap[Int, Set[ModuloCoord]] {
+    VoronoiUtils.voronoiTesselation(n_units,radius).groupBy( _._2 ).map{ (key, val) =>
+      key -> val.values.toSet
     }.toMap.par
   }
 
   /**
-  After building composition provide structure by updating the neighbors of
-  each planning unit
-  **/
-  def buildStructure(ParMap[Int, PlanningUnit]) = ParMap[Int,PlanningUnit]{
-    // here update the neighbor field of each planning unit
+  * @param id is the planning unit id
+  * @param radius is the radius of the biophysical landscape
+  * @param comp is the composition of the planning landscape
+  * @return a vector containing the ids of the planning units in the neighborhood
+  */
+  def ecoNeighbors(id: Int,
+                   radius: Int,
+                   comp: ParMap[Int, Set[ModuloCoord]]) = Vector[ModuloCoord] {
+    PlanningUnit.ecoNeighbors(radius,comp.get(id))
   }
 
-  def buildPlanningLandscape(n_units: Int, base: BioPhyLandscape) = PlanningLandscape {
-    PlanningLandscape(PlanningLandscape.buildComposition(n_units, base.radius()), base)
+  /**
+  * @param id is the planning unit id
+  * @param radius is the radius of the biophysical landscape
+  * @param comp is the composition of the planning landscape
+  * @return a vector containing the ids of the planning units in the neighborhood
+  */
+  def planningNeighbors(id: Int,
+                        radius: Int,
+                        comp: ParMap[Int, Set[ModuloCoord]]) = Vector[Int] {
+    PlanningUnit.ecoNeighbors(radius,comp.get(id)).map{ coord => comp.find( _._2.exists.(_.contains(coord)))._1 }.toSet.toVector
   }
 
-  def ecoNeighbors(radius: Int, unit_composition: Set[ModuloCoord]) = Vector[ModuloCoord]{
-    unit_composition.map( _.manhattanNeighbors(radius,1) ).toVector
+  /**
+  * @param n_units is the number of planning units to create
+  * @param radius is the radius of the biophysical landscape
+  * @return a vector containing the composition of the planning landscape
+  */
+  def buildComposition(n_units: Int, radius: Int) = ParMap[Int,PlanningUnit] {
+    val comp = prepareComposition(n_units,radius)
+    comp.map{ (id,c) =>
+      id -> PlanningUnit(id, c.get(id), ecoNeighbors(id,radius,comp), planningNeighbors(id,radius,comp))
+    }.toMap.par
   }
 
-  def neighbors(radius: Int, unit_id: Int, composition: ParMap[Int, Set[ModuloCoord]]) = Vector[Int]{
-    PlanningLandscape.ecoNeighbors(radius, composition.get(unit_id)).map{ en => composition.find( _._2.exists(_.contains(en)))._1 }.toSet.toVector
+  /**
+  * @param n_units is the number of planning units to create
+  * @param radius is the radius of the biophysical landscape
+  * @return the planning landscape
+  */
+  def apply(n_units: Int, radius: Int) = PlanningLandscape {
+    PlanningLandscape( buildComposition( n_units, radius ) )
   }
 
-  def isAvailable(unit_composition: Set[ModuloCoord], biophy_composition: ParMap[ModuloCoord, EcoUnit] ){
-    unit_composition.forall{ biophy_composition.get(_).isNotCultivated() }
-  }
 }

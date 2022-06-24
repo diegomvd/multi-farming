@@ -33,16 +33,59 @@ object VoronoiUtils{
 
 object S3Utils{ // utility functions for spatial stochastic simulations
 
+  // could be transformed to ParMap[Int,Double] to make it more general
   def positionSelector(prob: ParMap[ModuloCoord, Double]) = ModuloCoord {
     // one liner to get the position by ordering the map into a vector map
     val x_rand = rnd.nextDouble(1.0)
-    VectorMap(prob.toSeq.sortBy(_._1.m):_*).scanLeft[(ModuloCoord,Double)]((ModuloCoord(-1),0.0)){case ((_,acc),(pos,x)) => (pos, acc + x)}.find((_,x) => x_rand >= x)._1
+    VectorMap(prob.toSeq.sortBy(_._1.m):_*).scanLeft[(ModuloCoord,Double)]((ModuloCoord(-1),0.0)){case ((_,acc),(pos,x)) => (pos, acc + x)}.find((_,x) => x_rand <= x)._1
   }
 
   def eventSelector(radius: Int, pos: ModuloCoord, events: ParMap[ModuloCoord, Int]) = Int {
-    val potential_events = pos.manhattanNeighbors(radius,1).foldLeft(Vector[Int]())(case (allocated, p) => allocated :+ cells.get(p)).filter( _ != None )
+    val potential_events = pos.manhattanNeighbors(radius,1).foldLeft(Vector[Int]())(case (allocated, p) => allocated :+ cells.get(p)).filter( _ != None ).toVector
     potential_events(rnd.nextInt(potential_events.size()))
   }
+
+  def selectEvent(recovery: ParMap[ModuloCoord,Double], degradation: ParMap[ModuloCoord,Double], fertility_loss: ParMap[ModuloCoord,Double], management: ParMap[Int,Double], birth: Double, death: Double) = {
+
+    // assuming all the propensities come cummulative and sorted
+    val x_rand = rnd.nextDouble(recovery.last + degradation.last + fertility_loss.last + management.last + population.last)
+
+    /**
+    Better to subdivide by spontaneous, management, and population.
+    Go by cases and choose.
+    Then call specific function for each category taking the total
+    **/
+
+    S3Utils.selectCategory(recovery.last,degradation.last,fertility_loss.last,management.last,birth,death,x_rand) match {
+      case "recovery" => "recovery" -> selectPosition(recovery,0.0,x_rand)
+      case "degradation" => "degradation" -> selectPosition(degradation,recovery.last,x_rand)
+      case "fertility_loss" => "fertility_loss" -> selectPosition(fertility_loss,recovery.last+degradation.last,x_rand)
+      case "management" => "management" -> selectManagementUnit(management,spontaneous.last,x_rand)
+      case "birth" => "death" -> selectPopulation(population,spontaneous.last+management.last,x_rand)
+    }
+  }
+
+  def selectPosition(propensity: ParMap[ModuloCoord,Double], add: Double, x_rand: Double) = ModuloCoord {
+    S3Utils.positionSelector(propensity.map( _._1 -> _._2 + add ).toMap.par)
+  }
+
+  def selectManagementUnit(propensity: ParMap[Int,Double], add: Double, x_rand: Double) = Int {
+    S3Utils.selector(propensity.map( _._1 -> _._2 + add ).toMap.par)
+  }
+
+  def selectDemography(propensity: , add: , x_rand: ) = {}
+
+  def selectCategory(recovery: Double, degradation: Double, fertility_loss: Double, management: Double, birth: Double, death: Double, x_rand: Double) = String {
+    x_rand match {
+      case $<recovery => "spontaneous"
+      case $<recovery+degradation => "degradation"
+      case $<recovery+degradation+fertility_loss => "fertility_loss"
+      case $<recovery+degradation+fertility_loss+management => "management"
+      case $<recovery+degradation+fertility_loss+management+birth => "birth"
+      case $<recovery+degradation+fertility_loss+management+birth+death => "death"
+    }
+  }
+
 }
 
 object FragmentationUtils{

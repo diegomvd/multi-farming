@@ -4,11 +4,17 @@ case class HumanPopulation(size: Int){
   def birth() = HumanPopulation { HumanPopulation(this.size+1) }
   def death() = HumanPopulation { HumanPopulation(this.size-1) }
 
-  def birthPropensity() = Double { // function here
+  def resourceDemand(resource_production: Double) = Double {
+    this.size - resource_production
   }
-
-  def deathPropensity(carrying_capacity: Double) = Double {
+  def birthPropensity(): Double = 1.0
+  def deathPropensity(carrying_capacity: Double, resource_production: Double) = Double {
     //function here
   }
+}
+
+object HumanPopulation{
+
+  def buildHumans(population_size: Double): HumanPopulation = HumanPopulation(population_size)
 
 }

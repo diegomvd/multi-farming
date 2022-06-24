@@ -1,29 +1,47 @@
-case class EcolUnit(pos: ModuloCoord, neighbors: Vector[ModuloCoord], cover: String = "Natural", es_inflow: Double){
+case class EcoUnit(pos: ModuloCoord, neighbors: Vector[ModuloCoord], cover: String){
 
-  def recoveryPropensity(es_inflow: Double) = Double {
-    this.cover match {
-      case "Degraded" => // function here
-      case _ => 0
-    }
+  def pos: Double = this.pos
+  def neighbors: Vector[ModuloCoord] = this.neighbors
+  def cover: String = this.cover
+
+  def matchCover(c: String) = Bool { EcoUnit.checkCover(this.cover,c) }
+
+  def updateCover(cover: String) = Option[EcoUnit] { copy(this.pos, this.neighbors, cover) }
+
+}
+
+object EcoUnit{
+
+  /**
+  * @param c1 first land cover type
+  * @param c2 second land cover type
+  * @return true if both covers are equal, false if not
+  */
+  def matchCover(c1: String, c2: String) = Bool { c1 == c2 }
+
+  /**
+  * @param s is the sensitivity to ecosystem service inflow
+  * @param es is the ecosystem service inflow
+  * @param bool determines whether the unit has the right cover
+  * @return the recovery/degradation propensity
+  */
+  def recoveryEquation(s: Double, es: Double, bool: Bool) = Double {
+    if bool s*es
+    else 0.0
   }
-
-  def degradationPropensity(es_inflow: Double) = Double {
-    this.cover match {
-      case "Natural" => // function here
-      case _ => 0
-    }
+  def degradationEquation(s: Double, es: Double, bool: Bool) = Double {
+    if bool (1-es)*s
+    else 0.0
   }
-
-  def fertilityLossPropensity(es_inflow: Double) = Double {
-    this.cover match {
-      case "LowIntensityAgriculture" => // function here
-      case "HighIntensityAgriculture" => // function here
-      case _ => 0
-    }
+  /**
+  * @param f is either recovery/degradationEquation
+  * @return the propensity given the chosen function
+  */
+  def propensity(s: Double,
+                 es: Double,
+                 bool: Bool,
+                 f: (Double,Double,Bool) => Double) = Double {
+    f(es,s,bool)
   }
-
-  // method to update the land cover of a land unit
-  def updateCover: Option[EcologicalUnit] = ...
-
 
 }
