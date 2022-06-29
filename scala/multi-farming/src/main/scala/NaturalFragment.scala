@@ -18,9 +18,6 @@ case class NaturalFragment(composition: Vector[EcologicalUnit], es_supply: Doubl
 }
 
 
-
-
-
 case class NaturalFragments(composition: ParSet[ParSet[EcologicalUnit]]){
 
   def updateAdd(unit: EcologicalUnit, radius: Int, threshold: Int) = NaturalFragments {
