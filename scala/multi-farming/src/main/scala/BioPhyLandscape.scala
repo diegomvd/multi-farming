@@ -5,7 +5,9 @@ import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 import scala.math.pow
 
-case class BioPhyLandscape(comp: Graph[String, Long]){
+case class BioPhyLandscape(comp: Graph[String, Long],
+                           ncc: ,
+                           es: ){
   /**
   * @param s is the sensitivity to ecosystem service provision
   * @param c is the land cover type to be matched
@@ -17,7 +19,7 @@ case class BioPhyLandscape(comp: Graph[String, Long]){
   }
 
   def updated(unit: EcoUnit): BioPhyLandscape =
-    copy(this.radius, BioPhyLandscape.newComposition(unit,this.comp))
+    copy(this.radius, BioPhyLandscape.updatedComposition(unit,this.comp))
 
   /**
   Queries about the landscape's state
@@ -52,9 +54,9 @@ object BioPhyLandscape{
     val sc: SparkContext
     val units: RDD[(VertexId, String)] =
       sc.parallelize( ModCo.apply(r).map{ (_.toLong,"Natural") }.toSeq )
-    val edges: RDD[Edge[Int]] =
+    val edges: RDD[Edge[Long]] =
       sc.parallelize( ModCo.apply(r).toSet.subsets(2).collect{
-        case (pos1,pos2) if pos1.manhattanNeighbors(r,ecr).exists(_ == pos2) =>
+        case (pos1,pos2) if ModCo.neighbors(pos1,r,ecr).exists(_ == pos2) =>
           Edge(pos1.toLong,pos2.toLong,0L)
         }
       )
@@ -171,7 +173,7 @@ object BioPhyLandscape{
     // update the landscape and move on
     // else choose randomly a management unit and then a planning unit with the given weights
     // update the landscape and move on
-    // implement tail recursion  
+    // implement tail recursion
   }
 
 }

@@ -1,17 +1,28 @@
-case class PlanningLandscape(composition: ParMap[Int, PlanningUnit]){
+import org.apache.spark._
+import org.apache.spark.graphx._
+import org.apache.spark.rdd.RDD
+import org.apache.spark.graphx.Edge
+import org.apache.spark.graphx.Graph
+import scala.math.pow
+import scala.math.max
 
-  def availableUnits(biocomp: ParMap[ModuloCoord,EcoUnit]) = ParVector[Int]{
-    this.composition.collect{ case (id, un) if un.isAvailable(biocomp) => id }.toVector.par
+case class PlanningLandscape(comp: Graph[VertexRDD[VertexId],Long]){
+
+  def available(biophy: Graph[String,Long]): VertexRDD[VertexId] = {
+    this.comp.vertices.filter( PlanningUnit.isAvailable(_,biophy) )
   }
 
-  def conversionWeights(units: Set[Int],
-                        strategy: String,
-                        biocomp: ParMap[ModuloCoord,EcoUnit]) = ParMap[Int,Double] {
-    val propensity = this.composition.collect{ case units.contains(_._1) =>
-       _._1 -> _._2.conversionWeight(biocomp,strategy)
-    }.toMap.par
-    val total_propensity = propensity.sum[Int :> (Int,Double)](_._2 + _._2)
-    propensity.map( _._1 -> _._2/total_propensity )
+  def conversionWeights(biophy: Graph[String,Long],
+                        stg: String): VertexRDD[Double] {
+    stg match {
+      case "Sparing" => val w = PlanningLandscape.unavailableNeighbors(this.comp,biophy).mapValues( PlanningUnit.weightExpression(_,3.0) )
+      case "Sharing" => val w = PlanningLandscape.availableNeighbors(this.comp,biophy).mapValues( PlanningUnit.weightExpression(_,3.0) )
+    }
+    val w_tot = w.reduce(_+_)
+    w_tot match {
+      case 0 => w
+      case _ => w.mapValues(_ / w_tot)
+    }
   }
 
 }
@@ -22,59 +33,91 @@ object PlanningLandscape{
   * This function is a preliminary computation of the planning landscape's
   * composition.
   *  TODO: abstract voronoiTesselation
-  *  @param n_units is the number of planning units to create
-  *  @param radius is the radius of the biophysical landscape
+  *  @param nu is the number of planning units to create
+  *  @param nt is the total number of ecological units in the biophysical landscape
   *  @return a map storing the id and composition of each planning unit
   */
-  def prepareComposition(n_units: Int, radius: Int) = ParMap[Int, Set[ModuloCoord]] {
-    VoronoiUtils.voronoiTesselation(n_units,radius).groupBy( _._2 ).map{ (key, val) =>
-      key -> val.values.toSet
+  def prepareComposition(nu: Int, nt: Int): ParMap[Long,VertexRDD[VertexId]] = {
+    VoronoiUtils.voronoiTesselation(nu,nt).groupBy( _._2 ).map{ (key, val) =>
+      key.toLong -> val.values.toSet
     }.toMap.par
   }
 
   /**
-  * @param id is the planning unit id
-  * @param radius is the radius of the biophysical landscape
-  * @param comp is the composition of the planning landscape
-  * @return a vector containing the ids of the planning units in the neighborhood
+  *  @param nu is the number of planning units to create
+  *  @param r is the radius of the biophysical landscape
+  *  @return the composition graph of the planning landscape
   */
-  def ecoNeighbors(id: Int,
-                   radius: Int,
-                   comp: ParMap[Int, Set[ModuloCoord]]) = Vector[ModuloCoord] {
-    PlanningUnit.ecoNeighbors(radius,comp.get(id))
+  def buildComposition(nu: Int, r: Int) = Graph[VertexRDD[VertexId], Long] {
+
+    val nt = 3 * r * r + 3 * r + 1
+    val precomp = prepareComposition(nu,nt)
+
+    val sc: SparkContext
+    // the units are defined by a vertex id which is the id of the PlanningUnit
+    // and a VertexRDD of VertexIds from to the BioPhy composition graph
+    // and representing the EcoUnits belongin to the PlanningUnit.
+    val units: RDD[(VertexId, VertexRDD[VertexId])] =
+      sc.parallelize( precomp.map{ (_._1,_._2) }.toSeq )
+
+    // An edge between 2 PUs exists if PU1 has an adjacent EcoUnit that belongs
+    // to PU2
+    val edges: RDD[Edge[Long]] =
+      sc.parallelize( precomp.toSet.subsets(2).collect{ // using subsets guarantees no repeated operation
+        case (pu1,pu2) if PlanningUnit.adjacent(r,pu1._2).exists(_ == pu2._2) =>
+          Edge(pu1._1,pu2._1,0L)
+        }
+      )
+    Graph(units,edges)
   }
 
-  /**
-  * @param id is the planning unit id
-  * @param radius is the radius of the biophysical landscape
-  * @param comp is the composition of the planning landscape
-  * @return a vector containing the ids of the planning units in the neighborhood
-  */
-  def planningNeighbors(id: Int,
-                        radius: Int,
-                        comp: ParMap[Int, Set[ModuloCoord]]) = Vector[Int] {
-    PlanningUnit.ecoNeighbors(radius,comp.get(id)).map{ coord => comp.find( _._2.exists.(_.contains(coord)))._1 }.toSet.toVector
-  }
 
   /**
-  * @param n_units is the number of planning units to create
-  * @param radius is the radius of the biophysical landscape
-  * @return a vector containing the composition of the planning landscape
-  */
-  def buildComposition(n_units: Int, radius: Int) = ParMap[Int,PlanningUnit] {
-    val comp = prepareComposition(n_units,radius)
-    comp.map{ (id,c) =>
-      id -> PlanningUnit(id, c.get(id), ecoNeighbors(id,radius,comp), planningNeighbors(id,radius,comp))
-    }.toMap.par
-  }
-
-  /**
-  * @param n_units is the number of planning units to create
-  * @param radius is the radius of the biophysical landscape
+  * @param nu is the number of planning units to create
+  * @param r is the radius of the biophysical landscape
   * @return the planning landscape
   */
-  def apply(n_units: Int, radius: Int) = PlanningLandscape {
-    PlanningLandscape( buildComposition( n_units, radius ) )
+  def apply(nu: Int, r: Int) = PlanningLandscape {
+    PlanningLandscape( buildComposition(nu, r) )
   }
 
+  /**
+  * @param comp is the composition
+  * @param biophy is the composition of the biophysical landscape
+  * @return the number of available neighbors for each available unit
+  */
+  def availableNeighbors(comp: Graph[VertexRDD[VertexId],Long],
+                         biophy: Graph[String,Long]): VertexRDD[Int] = {
+    comp.aggregateMessages[Int](
+      triplet => {
+        if (PlanningUnit.isAvailable(triplet.dstAttr,biophy)) {
+          if (PlanningUnit.isAvailable(triplet.srcAttr,biophy)) {
+            triplet.sendToDst(1)
+          }
+          else triplet.sendToDst(0)
+        }
+      },
+      (a,b) => a + b
+    )
+  }
+
+  /**
+  * @param comp is the composition
+  * @param biophy is the composition of the biophysical landscape
+  * @return the number of unavailable neighbors for each available unit
+  */
+  def unavailableNeighbors(comp: Graph[VertexRDD[VertexId],Long],
+                           biophy: Graph[String,Long]): VertexRDD[Int] = {
+    comp.aggregateMessages[Int](
+      triplet => {
+        if (PlanningUnit.isAvailable(triplet.dstAttr,biophy)) {
+          if (PlanningUnit.isAvailable(triplet.srcAttr,biophy)) {
+            triplet.sendToDst(0)
+          }
+          else triplet.sendToDst(1)
+        }
+      },
+      (a,b) => a + b
+    )
+  }
 }
