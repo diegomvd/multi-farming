@@ -6,6 +6,17 @@ import org.apache.spark.graphx.Graph
 import scala.math.pow
 import scala.math.max
 
+case class PlanningUnit(comp: VertexRDD[VertexId]){
+
+  def adjacent(r: Int){
+    PlanningUnit.adjacent(r,this.comp)
+  }
+
+  def isAvailable(eco: Graph[EcoUnit,Long]){
+    PlanningUnit.isAvailable(this.comp,eco)
+  }
+}
+
 object PlanningUnit {
 
   /**
@@ -20,12 +31,12 @@ object PlanningUnit {
 
   /**
   * @param comp is the composition of the planning unit
-  * @param biophy is the composition of the biophysical landscape
+  * @param eco is the composition of the biophysical landscape
   * @return true if the planning unit can be cultivated, false if not
   */
   def isAvailable(comp: VertexRDD[VertexId],
-                  biophy: Graph[String,Long]) = Bool{
-    comp.exists( biophy.vertices.lookup(_) == "Natural") && comp.forall{ (biophy.vertices.lookup(_) == "Natural" || biophy.vertices.lookup(_) == "Degraded") }
+                  eco: Graph[EcoUnit,Long]) = Bool{
+    comp.exists( eco.vertices.lookup(_).cover == "Natural") && comp.forall{ (eco.vertices.lookup(_).cover == "Natural" || eco.vertices.lookup(_).cover == "Degraded") }
   }
 
   /**

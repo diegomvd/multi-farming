@@ -5,55 +5,18 @@ import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 import scala.math.pow
 
-case class BioPhyLandscape(comp: Graph[String, Long],
-                           ncc: ,
-                           es: ){
-  /**
-  * @param s is the sensitivity to ecosystem service provision
-  * @param c is the land cover type to be matched
-  * @param f is the function yielding a propensity given ecosystem service
-  *          provision and sensitivity
-  */
-  def propensities(s: Double, c: String, f: (Double,Double) => Double) = ParMap[ModCo,Double]{
-    BioPhyLandscape.propensities(this.comp,this.es,s,c,f)
-  }
-
-  def updated(unit: EcoUnit): BioPhyLandscape =
-    copy(this.radius, BioPhyLandscape.updatedComposition(unit,this.comp))
-
-  /**
-  Queries about the landscape's state
-  **/
-  def fractionNatural():       Double = this.comp.count{ _._2.isNatural() }
-  def fractionDegraded():      Double = this.comp.count{ _._2.isDegraded() }
-  def fractionLowIntensity():  Double = this.comp.count{ _._2.isLowIntensity() }
-  def fractionHighIntensity(): Double = this.comp.count{ _._2.isHighIntensity() }
-
-}
-
-object BioPhyLandscape{
-
-  /**
-  * @param r is the radius of the biophysical landscape
-  * @param ecr is the ecological connectivity range
-  * @return a fresh, pristine biophysical landscape
-  */
-  def apply(r: Int,
-            ecr: Int) = BioPhyLandscape {
-    val comp = buildComposition(r,ecr)
-    BioPhyLandscape(comp)
-  }
+object EcoLandscape{
 
   /**
   * @param r is the radius of the biophysical landscape
   * @param ecr is the ecological connectivity range
   * @return a biophysical composition with every unit in a natural state
   */
-  def buildComposition(r: Int, ecr: Int) = Graph[String, Long] {
-
+  def buildComposition(r: Int,
+                       ecr: Int) = Graph[EcoUnit, Long] {
     val sc: SparkContext
     val units: RDD[(VertexId, String)] =
-      sc.parallelize( ModCo.apply(r).map{ (_.toLong,"Natural") }.toSeq )
+      sc.parallelize( ModCo.apply(r).map{ (_.toLong,EcoUnit("Natural")) }.toSeq )
     val edges: RDD[Edge[Long]] =
       sc.parallelize( ModCo.apply(r).toSet.subsets(2).collect{
         case (pos1,pos2) if ModCo.neighbors(pos1,r,ecr).exists(_ == pos2) =>
@@ -69,8 +32,8 @@ object BioPhyLandscape{
   * @param r is the radius of the biophysical landscape
   * @return the map of ecosystem service provision in a pristine landscape
   */
-  def buildESFlow(r: Int) = ParMap[ModCo,Double] {
-    ModCo.apply(r).map{ _ -> 1.0}
+  def buildESFlow(r: Int) = VertexRDD[Double] {
+    sc.parallelize( ModCo.apply(r).map{ (_.toLong,1.0) }.toSeq )
   }
 
   /**
@@ -81,7 +44,7 @@ object BioPhyLandscape{
   */
   def updatedComposition(uid: Long,
                          cover: String
-                         comp: Graph[String, Long]) = Graph[String, Long] {
+                         comp: Graph[EcoUnit, Long]) = Graph[EcoUnit, Long] {
     Graph( comp.vertices.mapValues{ case (uid,_) => cover }, comp.edges )
   }
 
@@ -89,13 +52,14 @@ object BioPhyLandscape{
   * @param comp biophysical landscape's composition
   * @return the vertices in the connected components graph
   */
-  def naturalConnectedComponents(comp: Graph[String, Long]) = VertexRDD[VertexId]{
-    val natural = comp.subgraph(vpred = cover => cover == "Natural")
+  def naturalConnectedComponents(comp: Graph[EcoUnit, Long]) = VertexRDD[VertexId]{
+    val natural = comp.subgraph(vpred = (vid,eu) => eu.cover == "Natural")
     val ncc = natural.connectedComponents().vertices
   }
 
   /**
-  * @param ncc is the natural connected components
+  * @param ncc is the natural connected components, VertexRDD is over the EcoUnits
+  * and VertexId refers to the component id
   * @return a map with the number of units in each component
   */
   def nccArea(ncc: VertexRDD[VertexId]) = Map[(VertexId,VertexId), Long] {
@@ -103,17 +67,19 @@ object BioPhyLandscape{
   }
 
   /**
+  * @param total_area is the total number of EcoUnits in the landscape
+  * @return a composition graph joined with the area of the natural fragment they belong to
   */
-  def joinNCCArea(comp: Graph[String, Long],
-                  total_area: Double): Graph[String, Long] = {
+  def joinNCCArea(comp: Graph[EcoUnit, Long],
+                  total_area: Double): Graph[(EcoUnit,Double), Long] = {
     val ncc = naturalConnectedComponents(comp)
     val area = nccArea(ncc)
     val v_area: VertexRDD[Double] = ncc.map{ area.get((_,_)).toDouble }
 
-    comp.outerJoinVertices(v_area){ (id, cover, v_area_opt) =>
+    comp.outerJoinVertices(v_area){ (id, eu, v_area_opt) =>
       v_area_opt match {
-        case Some(v_area) => (cover, v_area/total_area)
-        case None => (cover,0.0)
+        case Some(v_area) => (eu, v_area/total_area)
+        case None => (eu,0.0)
       }
     }
   }
@@ -123,15 +89,15 @@ object BioPhyLandscape{
   * @param z is the ES-area scaling exponent
   * @return an RDD with each unit and the ES flow they receive
   */
-  def updatedESFlow(comp: Graph[String,Long],
+  def updatedESFlow(comp: Graph[EcoUnit,Long],
                     total_area: Double,
                     z: Double): VertexRDD[Double] = {
 
-    val joined_comp: Graph[String, Long] = joinNCCArea(comp,total_area)
+    val joined_comp: Graph[(EcoUnit,Double), Long] = joinNCCArea(comp,total_area)
 
     joined_comp.aggregateMessages[(Int,Double)](
       triplet => {
-        if (triplet.srcAttr._1 >= "Natural") {
+        if (triplet.srcAttr._1.cover == "Natural") {
           // this assumes that the second attribute is the component's area
           triplet.sendToDst((1,pow(triplet.srcAttr._2.toDouble, z)))
         }
@@ -141,24 +107,32 @@ object BioPhyLandscape{
     ).mapValues( (id,val) => val._2/val._1 )
   }
 
-  def joinES(comp: Graph[String,Long],
-             es: VertexRDD[Double]): Graph[String,Long] = {
-     comp.outerJoinVertices(es){ (id, cover, es_opt) =>
+  /**
+  * @param comp is the biophysical composition of the landscape
+  * @param es is the ecosystem service flow in each EcoUnit
+  * @return a graph joining the ecounits with the ES flow they receive
+  */
+  def joinES(comp: Graph[EcoUnit,Long],
+             es: VertexRDD[Double]): Graph[EcoUnit,Long] = {
+     comp.outerJoinVertices(es){ (id, eu, es_opt) =>
        es_opt match {
-         case Some(es) => (cover, es)
-         case None => (cover, 0.0)
+         case Some(es) => (eu, es)
+         case None => (eu, 0.0)
        }
      }
   }
 
-  def propensities(comp: Graph[String,Long],
+  /**
+  * @return a vertexRDD with the propensity for a certain transition in each EcoUnit of the graph
+  */
+  def propensities(comp: Graph[EcoUnit,Long],
                    es: VertexRDD[Double],
                    s: Double,
                    c: String,
                    f: (Double,Double) => Double) = VertexRDD[Double] {
 
-    val joined_comp: Graph[String,Long] = joinES(comp,es)
-    joined_comp.mapValues{ (id, val) => EcoUnit.propensity(val._2, s, EcoUnit.matchCover(c,val._1), f) }
+    val joined_comp: Graph[(EcoUnit,Double),Long] = joinES(comp,es)
+    joined_comp.vertices.mapValues{ (id, (eui, esi)) => EcoUnit.propensity(esi, s, eui.matchCover(c), f) }
   }
 
   // this is a discrete time stochastic process to generate an initial landscape

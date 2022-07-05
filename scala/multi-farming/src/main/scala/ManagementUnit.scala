@@ -1,17 +1,21 @@
-case class ManagementUnit(id: Int, comp: Set[Int], strategy: String){
+import org.apache.spark._
+import org.apache.spark.graphx._
+import org.apache.spark.rdd.RDD
+import org.apache.spark.graphx.Edge
+import org.apache.spark.graphx.Graph
 
-  def id = this.id
-  def composition = this.comp
-  def strategy = this.strategy
+case class ManagementUnit(comp: VertexRDD[VertexId], stg: String){
 
-  def isAvailable(landscape: PlanningLandscape): Bool =
-    ManagementUnit.isAvailable(this.comp,landscape)
+  def isAvailable(plan: Graph[PlanningUnit,Long],
+                  eco: Graph[EcoUnit,Long]): Bool = {
+    ManagementUnit.isAvailable(this.comp,plan,eco)
+  }
 
-  def conversionPropensity(landscape: PlanningLandscape,
-                           biocomp: ParMap[ModuloCoord,EcoUnit],
-                           tcp: Double): ParMap[Int,Double] =
-    ManagementUnit.conversionPropensity(this.comp,this.strategy,landscape,biocomp,tcp)
-
+  def conversionPropensity(plan: Graph[PlanningUnit,Long],
+                           eco: Graph[EcoUnit,Long],
+                           tcp: Double): VertexRDD[Double] = {
+    ManagementUnit.conversionPropensity(this.comp,plan,eco,this.stg,tcp)
+  }
 }
 
 object ManagementUnit{
@@ -19,31 +23,40 @@ object ManagementUnit{
   /**
   * @param comp is the set of planning unit ids belonging to this managament unit: a vertex of the management graph
   * @param plan is the planning landscape
-  * @param biophy is the biophysical landscape
+  * @param eco is the biophysical landscape
   * @return true if the management unit is available, false if not
   */
   def isAvailable(comp: VertexRDD[VertexId],
-                  plan: PlanningLandscape,
-                  biophy: BioPhysicalLandscape) = Bool {
-    comp.exists{
-      // this gets the planning unit atribute which is a vertexRDD with the vertexID of the EcoUnits composing it
-      PlanningUnit.isAvailable( plan.comp.lookup(_), biophy.comp )
-    }
+                  plan: Graph[PlanningUnit,Long],
+                  eco: Graph[EcoUnit,Long]) : Bool = {
+    comp.exists{  plan.lookup(_).comp.isAvailable(eco) }
   }
 
   /**
-  * @param comp is the set of planning unit ids belonging to this managament unit
-  * @param stg is the land-use management strategy of this unit
-  * @param plan is the planning landscape
-  * @param biophy is the composition of the biophysical landscape
+  * @param comp is the composition of the management unit
+  * @param plan is the planning landscape composition graph
+  * @param eco is the biophysical landscape composition graph
+  * @param stg is the management strategy of the unit
   * @param tcp is the total conversion propensity
-  * @return a map with the ids of each planning unit in this management unit associated with their conversion propensity
+  * @return a VertexRDD with the propensity associated to each PU
   */
-  def conversionPropensity(select: VertexRDD[VertexId],
+  def conversionPropensity(comp: VertexRDD[VertexId],
+                           plan: Graph[PlanningUnit,Long],
+                           eco: Graph[EcoUnit,Long],
                            stg: String,
-                           plan: PlanningLandscape,
-                           biophy: Graph[String,Long],
-                           tcp: Double) = VertexRDD[Double] {
-    plan.conversionWeights(select, biophy, stg).mapValues( _ * tcp )
+                           tcp: Double): VertexRDD[Double] = {
+
+    val pun = PlanningLandscape.extendedSubGraph(plan,comp)
+
+    stg match {
+      case "Sparing" => val w = PlanningLandscape.unavailableNeighbors(pun,eco).mapValues( PlanningUnit.weightExpression(_,3.0) )
+      case "Sharing" => val w = PlanningLandscape.availableNeighbors(pun,eco).mapValues( PlanningUnit.weightExpression(_,3.0) )
+    }
+
+    val w_tot = w.reduce(_+_)
+    w_tot match {
+      case 0.0 => w
+      case _ => w.mapValues(_ / w_tot * tcp)
+    }
   }
 }
