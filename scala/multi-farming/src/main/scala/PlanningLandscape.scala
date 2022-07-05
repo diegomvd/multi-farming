@@ -6,17 +6,21 @@ import org.apache.spark.graphx.Graph
 import scala.math.pow
 import scala.math.max
 
+// vertexId refers to ecounitss
 case class PlanningLandscape(comp: Graph[VertexRDD[VertexId],Long]){
 
   def available(biophy: Graph[String,Long]): VertexRDD[VertexId] = {
     this.comp.vertices.filter( PlanningUnit.isAvailable(_,biophy) )
   }
 
-  def conversionWeights(biophy: Graph[String,Long],
+  def conversionWeights(select: VertexRDD[VertexId],
+                        biophy: Graph[String,Long],
                         stg: String): VertexRDD[Double] {
+                          
+    val subg = this.comp.subgraph( vpred = (vid,attr) => select.contains(vid) )
     stg match {
-      case "Sparing" => val w = PlanningLandscape.unavailableNeighbors(this.comp,biophy).mapValues( PlanningUnit.weightExpression(_,3.0) )
-      case "Sharing" => val w = PlanningLandscape.availableNeighbors(this.comp,biophy).mapValues( PlanningUnit.weightExpression(_,3.0) )
+      case "Sparing" => val w = PlanningLandscape.unavailableNeighbors(subg,biophy).mapValues( PlanningUnit.weightExpression(_,3.0) )
+      case "Sharing" => val w = PlanningLandscape.availableNeighbors(subg,biophy).mapValues( PlanningUnit.weightExpression(_,3.0) )
     }
     val w_tot = w.reduce(_+_)
     w_tot match {
@@ -82,7 +86,7 @@ object PlanningLandscape{
   }
 
   /**
-  * @param comp is the composition
+  * @param comp is the composition graph of the selected management unit
   * @param biophy is the composition of the biophysical landscape
   * @return the number of available neighbors for each available unit
   */
@@ -102,7 +106,7 @@ object PlanningLandscape{
   }
 
   /**
-  * @param comp is the composition
+  * @param comp is the composition graph of the selected management unit
   * @param biophy is the composition of the biophysical landscape
   * @return the number of unavailable neighbors for each available unit
   */

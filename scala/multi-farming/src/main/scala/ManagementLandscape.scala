@@ -4,11 +4,13 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
+// vertexId refers to planning unit
 case class ManagementLandscape(comp: Graph[(VertexRDD[VertexId],String), Long]){
 
-  def conversionPropensity(landscape: PlanningLandscape,
+  def conversionPropensity(plan: PlanningLandscape,
+                           biophy: BioPhysicalLandscape
                            tcp: Double) = ParMap[Int,Double] {
-    ManagementLandscape.conversionPropensity(this.comp,landscape,tcp)
+    ManagementLandscape.conversionPropensity(this.comp,plan,biophy,tcp)
   }
 }
 
@@ -70,12 +72,19 @@ object ManagementLandscape{
                            plan: PlanningLandscape,
                            biophy: BioPhysicalLandscape,
                            tcp: Double) = VertexRDD[Double] {
+    // sends 1 if there is at least one available PU in the MU: thus this means
+    // traversing the graph and lookin if MU is available
     val prop = comp.vertices.mapValues{ (vid, (vrdd,_)) =>
-      if PlanningUnit.isAvailable(landscape) id -> 1.0
-      else id -> 0.0
+      if ManagementUnit.isAvailable(vrdd,plan,biophy){
+        1.0
+      }
+      else 0.0
     }
-    val sum = propensity.sum[Double >: (Int,Double)](_._2 + _._2)
-    propensity.map( _._1 -> _._2/sum*tcp ).toMap.par
+    val sum = prop.reduce(_+_)
+    sum match{
+      case 0.0 => prop
+      case _ => prop.mapValues(_ / sum * tcp)
+    }
   }
 
 }
