@@ -20,10 +20,10 @@ object VoronoiUtils{
     val area = 3 * radius * radius + 3 * radius + 1
     if (cells.size() >= area) cells
     else{
-      val pos = S3Utils.positionSelector( VoronoiUtils.voronoiProbability(radius, cells) )
+      val pos = S3Utils.positionSelector( voronoiProbability(radius, cells) )
       val cell = S3Utils.eventSelector( radius, pos, cells )
       val new_cells = cells.map( case (_,id) => pos -> id ).toMap.par
-      VoronoiUtils.voronoiRadialGrowth( radius, pos, new_cells)
+      voronoiRadialGrowth( radius, pos, new_cells)
     }
   }
 

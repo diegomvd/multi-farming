@@ -37,15 +37,31 @@ object EcoLandscape{
   }
 
   /**
+  * @param vids are the vertexId of the units to update
+  * @param cover is the new land cover
+  * @param comp is the biophysical landscape composition
+  * @return the updated composition
+  */
+  def updatedComposition(vids: VertexRDD[VertexId],
+                         cover: String
+                         comp: Graph[EcoUnit, Long]) = Graph[EcoUnit, Long] {
+    val upd_vertices: VertexRDD = comp.vertices.mapValues{ case (vid, _) =>
+      if vids.contains(vid) => EcoUnit(cover) } // note that the new cover is the same for every unit
+    Graph( upd_vertices, comp.edges )
+  }
+
+  /**
   * @param uid is the vertexId of the unit
   * @param cover is the new land cover
   * @param comp is the biophysical landscape composition
   * @return the updated composition
   */
-  def updatedComposition(uid: Long,
+  def updatedComposition(uid: VertexId,
                          cover: String
                          comp: Graph[EcoUnit, Long]) = Graph[EcoUnit, Long] {
-    Graph( comp.vertices.mapValues{ case (uid,_) => cover }, comp.edges )
+    val upd_vertices: VertexRDD = comp.vertices.mapValues{ case (vid, _) =>
+      if (uid == vids) => EcoUnit(cover) } // note that the new cover is the same for every unit
+    Graph( upd_vertices, comp.edges )
   }
 
   /**
@@ -129,25 +145,75 @@ object EcoLandscape{
                    es: VertexRDD[Double],
                    s: Double,
                    c: String,
-                   f: (Double,Double) => Double) = VertexRDD[Double] {
+                   f: (Double,Double,Bool) => Double) = VertexRDD[Double] {
 
     val joined_comp: Graph[(EcoUnit,Double),Long] = joinES(comp,es)
     joined_comp.vertices.mapValues{ (id, (eui, esi)) => EcoUnit.propensity(esi, s, eui.matchCover(c), f) }
   }
 
-  // this is a discrete time stochastic process to generate an initial landscape
-  // faithful to the mechanisms of the model in the hope that the transient duration
-  def initialize(biophy: BioPhyLandscape,
-                 plan: PlanningLandscape,
-                 mng: ManagementLandscape,
-                 n_agr: Int,
-                 n_deg: Int): BioPhyLandscape = {
-    // randomly choose either an agr or deg transition according to the remaining ones
-    // if it is a deg transition: get weights of each vertex with deg propensity and es
-    // update the landscape and move on
-    // else choose randomly a management unit and then a planning unit with the given weights
-    // update the landscape and move on
-    // implement tail recursion
+  @annotation.tailrec
+  def initialize(eco: Graph[EcoUnit,Long],
+                 plan: Graph[PlanningUnit,Long],
+                 mng: Graph[ManagementUnit,Long],
+                 z: Double,
+                 fagr: Double,
+                 fdeg: Double): Graph[EcoUnit,Long] = {
+
+    val total_area: Int = eco.vertices.count().toInt
+    val n_agr: Int = total_area*fagr.toInt
+    val n_deg: Int = total_area*fdeg.toInt
+
+    def rec(eco: Graph[EcoUnit,Long],
+            plan: Graph[PlanningUnit,Long],
+            mng: Graph[ManagementUnit,Long],
+            total_area: Int,
+            z: Double,
+            n_agr: Int,
+            n_deg: Int): Graph[EcoUnit,Long] = {
+      val n: Int = n_agr + n_deg
+      if (n > 0) {
+        val rnd_n: Int = rnd.nextInt(n)
+        if (rnd_n < n_agr){ // this means that agricultural conversion is chosen
+          // first choose a management unit among the available ones
+          val mngp: VertexRDD[Double] =
+            ManagementLandscape.conversionPropensity(mng,plan,eco,1.0)
+          val sum: Double = mngp.reduce(_+_)
+          val rnd_x: Double = rnd.nextDouble(sum)
+          val mid: VertexId = S3Utils.selectVId(rnd_x,prop)
+          // now choose an available planning unit belonging to the management unit, this part is wrong
+          // need to go again with the functions
+          val plnp: VertexRDD[Double] =
+            mng.lookup(mid).conversionPropensity(plan,eco,1.0)
+          val pid: VertexId = S3Utils.selectVId(rnd_x,prop)
+          val vids: VertexRDD[VertexId] = plan.lookup(pid)
+          mng.lookup(mid).stg match{
+            case "Sharing" => val upd_eco: Graph[EcoUnit,Long] = updatedComposition(vids, "Low-intensity", eco)
+            case "Sparing" => val upd_eco: Graph[EcoUnit,Long] = updatedComposition(vids, "High-intensity", eco)
+            case other => println(s"Trying to use strategy $other, only Sharing and Sparing are allowed")
+          }
+          // update remaining number of land cover changes
+          val upd_n_deg = n_deg
+          if n_agr>0 { val upd_n_agr = n_agr - 1 }
+          else {val upd_n_agr = n_agr}
+        }
+        else{ // this means that a degrading transition is chosen
+          // calculate ecosystem service flow and the degradation propensity
+          val es: VertexRDD[Double] = updatedESFlow(eco,total_area,z)
+          val prop: VertexRDD[Double] = propensities(eco,es,1.0,"Natural",EcoUnit.degradationEquation)
+          // sample the distribution by drawing a random number
+          val rnd_x: Double = rnd.nextDouble( prop.reduce(_+_) )
+          val vid: VertexId = S3Utils.selectVId(rnd_x,prop)
+          // update composition accordingly
+          val upd_eco: Graph[EcoUnit,Long] = updatedComposition(vid, "Degraded", eco)
+          // update remaining number of land cover changes
+          val upd_n_agr = n_agr
+          if n_deg>0 { val upd_n_deg = n_deg - 1 }
+          else {val upd_n_deg = n_deg}
+        }
+      }
+      rec(upd_eco, plan, mng, total_area, z, upd_n_agr, upd_n_deg)  
+    }
+
   }
 
 }

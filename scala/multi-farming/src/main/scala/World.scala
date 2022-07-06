@@ -1,4 +1,8 @@
-class World(biophy_layer: BioPhyLandscape, planning_layer: PlanningLandscape, management_layer: ManagementLandscape, population_layer: HumanPopulation, params: Parameters){
+class World(eco: Graph[EcoUnit,Long],
+            pln: Graph[PlanningUnit,Long],
+            mng: Graph[ManagementUnit,Long],
+            pop: Double,
+            params: Parameters){
 
   private var world: World = buildWorld()
 
@@ -88,19 +92,24 @@ class World(biophy_layer: BioPhyLandscape, planning_layer: PlanningLandscape, ma
 
 object World{
 
-  def buildWorld(args: Parameters) = World {
+  def apply(args: Parameters): World = {
 
-    // val parameters = InputOutput.parseArgs(args)
+    val eco: Graph[EcoUnit,Long] = EcoLandscape.build(args.r,args.ecr)
 
-    val biophy_layer = buildBioPhysicalLandscape(args.radius,args.threshold)
-    val planning_layer = buildPlanningLandscape(args.)
-    val management_layer = buildManagementLandscape()
-    val population_layer = buildHumanPopulation()
+    val npu: Int =
+    val pln: Graph[PlnUnit,Long] = PlnLandscape.build(npu,args.r)
 
-    World(biophy_layer, planning_layer, management_layer, population_layer)
+    val nmu: Int =
+    val mng: Graph[MngUnit,Long] = MngLandscape.build(nmu,npu,args.fs)
 
+    val res: Double =
+      PlnLandscape.totalResources(pln,eco,args.y_es,args.z,args.his)
+    val pop: Double = HumanPopulation.build(res)
+
+    World(eco,pln,mng,pop)
   }
 
-  def nextEvent
+  def nextEvent(): String = {}
 
 }
+// val parameters = InputOutput.parseArgs(args)
