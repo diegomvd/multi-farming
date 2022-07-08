@@ -99,4 +99,9 @@ object PlanningLandscape{
     comp.subgraph( vpred = (vid,attr) => sub.contains(vid) )
   }
 
+  /**
+  * calculate the resources
+  */
+  def resources()
+
 }

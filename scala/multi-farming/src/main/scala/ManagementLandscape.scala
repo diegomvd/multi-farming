@@ -73,4 +73,6 @@ object ManagementLandscape{
     }
   }
 
+  def totalConversionPropensity()=
+
 }
