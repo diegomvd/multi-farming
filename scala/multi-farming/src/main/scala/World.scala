@@ -36,18 +36,16 @@ object World{
 
   def apply(args: Parameters): World = {
 
-    val eco_empty: Graph[EcoUnit,Long] = EcoLandscape.build(args.r,args.ecr)
-
-    val npu: Int =
+    val eco_pristine: Graph[EcoUnit,Long] = EcoLandscape.build(args.r,args.ecr)
+    val npu: Int = args.pscale/args.size
     val pln: Graph[PlnUnit,Long] = PlnLandscape.build(npu,args.r)
-
-    val nmu: Int =
+    val nmu: Int = args.mscale/args.size
     val mng: Graph[MngUnit,Long] = MngLandscape.build(nmu,npu,args.fs)
 
     val eco: Graph[EcoUnit,Long] =
-      EcoLandscape.initialize(eco_empty,pln,mng,args.size,args.z,args.fagr,args.fdeg)
+      EcoLandscape.init(eco_pristine,pln,mng,args.size,args.z,args.fagr,args.fdeg)
 
-    val res: Double =
+    val res: Double = EcoLandscape.resources()
       PlnLandscape.totalResources(pln,eco,args.y_es,args.z,args.his)
     val pop: Double = HumanPopulation.build(res)
 

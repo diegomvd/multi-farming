@@ -125,31 +125,122 @@ object EcoLandscape{
      }
   }
 
+  def esGraphDirect(eco: Graph[EcoUnit,Long],
+                    z: Double,
+                    size: Int): Graph[(EcoUnit,Double),Long] = {
+    val ncc: VertexRDD[VertexId] = naturalConnectedComponents(eco)
+    val ncc_area: Map[(VertexId,VertexId),Long] = nccAreaDistribution(ncc)
+    val area_graph: Graph[(EcoUnit,Double),Long] = nccAreaGraph(eco,ncc,ncc_area,size)
+    val es_flow: VertexRDD[Double] = esFlow(area_graph,z)
+    esGraph(eco,es_flow)
+  }
+
   /**
-  * @param eco is the biophysical composition of the landscape
-  * @param es is the ecosystem service flow in each unit
+  * @param eco_join is the biophysical composition of the landscape joined with the es flow
+  * @param y1
+  * @param y2
+  * @return the total amount of resources produced in the landscape
+  */
+  def resources(eco_join: Graph[(EcoUnit,Double),Long],
+                y1: Double,
+                y2: Double): Double = {
+    eco_join.vertices.mapValues{ case (eu, es) => f(es,y1,y2) }.reduce( _+_ )
+  }
+
+  def resourcesDirect(eco: Graph[EcoUnit,Long],
+                      z: Double,
+                      size: Int,
+                      y1: Double,
+                      y2: Double): Double = {
+    val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,z,size)
+    es_graph.vertices.mapValues{ case (eu, es) => f(es,y1,y2) }.reduce( _+_ )
+  }
+
+  /**
+  * @param ival is the initial value for the cummulative sum
+  * @param eco_join is the biophysical composition of the landscape joined with the es flow
   * @param s is this transition's sensitivity with es flow
   * @param c is the land cover type required for this transition
   * @param f is the function to calculate the propensity of this transition
   * @return a vertexRDD with the propensity for a certain transition in each EcoUnit of the graph
   */
-  def propensities(eco: Graph[EcoUnit,Long],
-                   es: VertexRDD[Double],
+  def propensities(ival: Double,
+                   eco_join: Graph[(EcoUnit,Double),Long],
                    s: Double,
                    c: String,
-                   f: (Double,Double,Bool) => Double) = VertexRDD[Double] {
-    val es_graph: Graph[(EcoUnit,Double),Long] = esGraph(eco,es)
-    es_graph.vertices.mapValues{ (id, (eu, esf)) => EcoUnit.propensity(esf, s, eu.matchCover(c), f) }
+                   f: (Double,Double,Bool) => Double): VertexRDD[Double] = {
+    val prop: VectorMap[VertexId,Double] = es_graph.vertices.mapValues{ (id, (eu, esf)) =>
+       EcoUnit.propensity(esf, s, eu.matchCover(c), f) }.collect.toSeq.groupMapReduce(_._1)(_._2)(_+_).sortBy(...)
+    prop.scanLeft(_+_)
   }
 
+  /**
+  This is way sub optimal as th es graph would be calculated again for each type of propensity
+  */
+  def propensitiesDirect(eco: Graph[EcoUnit,Long],
+                         z: Double,
+                         size: Int,
+                         s: Double,
+                         c: String,
+                         f: (Double,Double,Bool) => Double): VertexRDD[Double] = {
+    val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,es_flow)
+    propensities(es_graph,s,c,f)
+  }
 
-  def initialize(eco: Graph[EcoUnit,Long],
-                 plan: Graph[PlanningUnit,Long],
-                 mng: Graph[ManagementUnit,Long],
-                 size: Int,
-                 z: Double,
-                 fagr: Double,
-                 fdeg: Double): Graph[EcoUnit,Long] = {
+  /**
+  * @param eco is the biophysical landscape graph
+  * @param z is the ecosystem services - area scaling
+  * @param size is the total number of units in the biophysical landscape
+  * @return the degradation propensity for the initialization
+  */
+  def degradationPropensityInit(eco: Graph[EcoUnit,Long],
+                                z: Double,
+                                size: Int): VertexRDD[Double] = {
+    val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,es_flow)
+    propensities(es_graph,1.0,"Natural",EcoUnit.degradationEquation)
+  }
+
+  def initAgriculturalUnit(eco: Graph[EcoUnit,Long],
+                           plan: Graph[PlanningUnit,Long],
+                           mng: Graph[ManagementUnit,Long]
+                           tcp: Double): Graph[EcoUnit,Long] = {
+    // this might be wrong because 1.0 should be the total propensity
+    val x_rnd: Double = rnd.nextDouble( tcp )
+    World.applyConversionEvent(x_rnd,eco,plan,mng,tcp)
+  }
+
+  def initDegradedUnit(eco: Graph[EcoUnit,Long],
+                       z: Double,
+                       size: Int){
+    val prop: VertexRDD[Double] = degradationPropensityInit(eco,z,size)
+    val x_rnd: Double = rnd.nextDouble( prop.reduce(_+_) )
+    World.applySpontaneousEvent(x_rnd,prop,eco,"Degraded")
+  }
+
+  def initUpdateRemaining(n: (Int,Int),
+                          event: String): (Int,Int) = {
+    event match{
+      case "Conversion" =>{
+        val upd_n_deg = n._2
+        if n._1>0 { val upd_n_agr = n._1 - 1 }
+        else {val upd_n_agr = n._1}
+      }
+      case "Degradation" =>{
+        val upd_n_agr = n._1
+        if n._2>0 { val upd_n_deg = n._2 - 1 }
+        else {val upd_n_deg = n._1}
+      }
+    }
+    (upd_n_agr,upd_n_deg)
+  }
+
+  def init(eco: Graph[EcoUnit,Long],
+           plan: Graph[PlanningUnit,Long],
+           mng: Graph[ManagementUnit,Long],
+           size: Int,
+           z: Double,
+           fagr: Double,
+           fdeg: Double): Graph[EcoUnit,Long] = {
 
     val n_agr: Int = size*fagr.toInt
     val n_deg: Int = size*fdeg.toInt
@@ -163,45 +254,33 @@ object EcoLandscape{
             n_agr: Int,
             n_deg: Int): Graph[EcoUnit,Long] = {
 
-      // this is the number of remaining transitions to execute
       val n: Int = n_agr + n_deg
-      // for tail recursion the biophysical landscape is returned in case there are no more transitions to execute
       if (n==0){
         eco
       }
-      else { // the recursive call, as long as there are transitions to execute, goes inside this block
-        // the first step is selecting if next transition is agricultural expansion or land degradation
-        val n_rnd: Int = rnd.nextInt(n)
-
-        if (n_rnd < n_agr){ // this selects agricultural expansion
-          // this might be wrong because 1.0 should be the total propensity
-          val x_rnd: Double = rnd.nextDouble( 1.0 )
-          val upd_eco: Graph[EcoUnit,Long] = World.applyConversionEvent(x_rand,eco,plan,mng,1.0)
-
-          // update remaining number of land cover changes
-          val upd_n_deg = n_deg
-          if n_agr>0 { val upd_n_agr = n_agr - 1 }
-          else {val upd_n_agr = n_agr}
+      else {
+        rnd.nextInt(n) match {
+          case n_rnd if n_rnd<n_agr => {
+            val n_remaining: (Int,Int) = initUpdateRemaining(n_agr,n_deg,"Conversion")
+            val upd_eco: Graph[EcoUnit,Long] = initAgriculturalUnit(eco,plan,mng,1.0)
+          }
+          case n_rnd if n_rnd<n_deg => {
+            val n_remaining: (Int,Int) = initUpdateRemaining(n_agr,n_deg,"Degradation")
+            val upd_eco: Graph[EcoUnit,Long] = initDegradedUnit(eco,z,size)
+          }
         }
-        else{ // this selects a land degradation transition
-          // calculate ecosystem service flow and the degradation propensity
-          val ncc: VertexRDD[VertexId] = naturalConnectedComponents(eco)
-          val ncc_area: Map[(VertexId,VertexId),Long] = nccAreaDistribution(ncc)
-          val area_graph: Graph[(EcoUnit,Double),Long] = nccAreaGraph(eco,ncc,ncc_area,size)
-          val es_flow: VertexRDD[Double] = esFlow(area_graph,z)
-          val prop: VertexRDD[Double] = propensities(eco,es_flow,1.0,"Natural",EcoUnit.degradationEquation)
-
-          val x_rnd: Double = rnd.nextDouble( prop.reduce(_+_) )
-          val upd_eco: Graph[EcoUnit,Long] = World.applySpontaneousEvent(x_rand,prop,eco,"Degraded")
-
-          // update remaining number of land cover changes
-          val upd_n_agr = n_agr
-          if n_deg>0 { val upd_n_deg = n_deg - 1 }
-          else {val upd_n_deg = n_deg}
-        }
+        rec(upd_eco, plan, mng, size, z, n_remaining._1, n_remaining._2)
       }
-      rec(upd_eco, plan, mng, size, z, upd_n_agr, upd_n_deg)
     }
+  }
+
+  def allSpontaneous(ival: Double,
+                     eco_join: Graph[(EcoUnit,Double),Long],
+                     s: (Double,Double,Double)): (VertexRDD[Double],VertexRDD[Double],VertexRDD[Double],Double) = {
+    val recovery: (VertexRDD[Double], Double) = propensities(ival,eco_join,s._1)
+    val degradation: (VertexRDD[Double], Double) = propensities(recovery._2,eco_join,s._2)
+    val fertility_loss: (VertexRDD[Double], Double) = propensities(degradation._2,eco_join,s._3)
+    (recovery._1,degradation._1,fertility_loss._1,fertility_loss._3)
   }
 
 }
