@@ -20,9 +20,9 @@ case class PlanningUnit(comp: VertexRDD[VertexId]){
 object PlanningUnit {
 
   /**
-  * @param r is the radius of the biophysical landscape
-  * @param comp the composition of the planning unit
-  * @return an RDD with th IDs of each ecological unit adjacent to the planning unit
+  @paramr is the radius of the biophysical landscape
+  @paramcomp the composition of the planning unit
+  @return an RDD with th IDs of each ecological unit adjacent to the planning unit
   */
   def adjacent(r: Int,
                comp: VertexRDD[VertexId]) = VertexRDD[VertexId]{
@@ -30,9 +30,9 @@ object PlanningUnit {
   }
 
   /**
-  * @param comp is the composition of the planning unit
-  * @param eco is the composition of the biophysical landscape
-  * @return true if the planning unit can be cultivated, false if not
+  @paramcomp is the composition of the planning unit
+  @parameco is the composition of the biophysical landscape
+  @return true if the planning unit can be cultivated, false if not
   */
   def isAvailable(comp: VertexRDD[VertexId],
                   eco: Graph[EcoUnit,Long]) = Bool{
@@ -40,9 +40,9 @@ object PlanningUnit {
   }
 
   /**
-  * @param nn is the number of neighbors that give wieht to the clustering
-  * @param clst is the clustering coefficient
-  * @return the clustering weight
+  @paramnn is the number of neighbors that give wieht to the clustering
+  @paramclst is the clustering coefficient
+  @return the clustering weight
   */
   def weightExpression(nn: Int, clst: Double) = Double{
     pow( max(0.1,nn), clst)

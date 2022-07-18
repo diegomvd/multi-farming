@@ -6,10 +6,10 @@ import org.apache.spark.graphx.Graph
 
 object ManagementLandscape{
   /**
-  * @param nm is the number of management units
-  * @param np is the number of planning units
-  * @param fs is the fraction of land-sparing management units
-  * @return a map containign each management unit and their ids
+  @param nm is the number of management units
+  @param np is the number of planning units
+  @param fs is the fraction of land-sparing management units
+  @return a map containign each management unit and their ids
   * TODO: abstract voronoiTesselation torender it more flexible
   **/
   def prepareComposition(nm: Int,
@@ -25,10 +25,10 @@ object ManagementLandscape{
   }
 
   /**
-  * @param nm is the number of management units
-  * @param np is the number of planning units
-  * @param fs is the fraction of land-sparing management units
-  * @return the composition graph of the management landscape
+  @param nm is the number of management units
+  @param np is the number of planning units
+  @param fs is the fraction of land-sparing management units
+  @return the composition graph of the management landscape
   */
   def buildComposition(nm: Int,
                        np: Int,
@@ -48,31 +48,30 @@ object ManagementLandscape{
   }
 
   /**
-  * @param comp the management landscape composition
-  * @param plan the planning landscape
-  * @param tcp the total conversion propensity
-  * @return an RDD with the conversion propensity of each management unit
-  * TODO: create a normalize function
+  @param comp the management landscape composition
+  @param plan the planning landscape
+  @param eco the biophyisical landscape
+  @return an RDD with the relative conversion probabilities at each management unit. We assume uniform probability among the available units
   */
-  def conversionPropensity(comp: Graph[ManagementUnit, Long],
-                           plan: Graph[PlanningUnit, Long],
-                           eco: Graph[EcoUnit, Long],
-                           tcp: Double) : VertexRDD[Double] = {
-    // sends 1 if there is at least one available PU in the MU: thus this means
-    // traversing the graph and lookin if MU is available
-    val prop = comp.vertices.mapValues{ (vid, mu) =>
-      if mu.isAvailable(plan,eco){
-        1.0
-      }
-      else 0.0
-    }
-    val sum = prop.reduce(_+_)
-    sum match{
-      case 0.0 => prop
-      case _ => prop.mapValues(_ / sum * tcp)
-    }
+  def probabilities(comp: Graph[ManagementUnit, Long],
+                    plan: Graph[PlanningUnit, Long],
+                    eco: Graph[EcoUnit, Long]): VertexRDD[Double] = {
+    val sg: Graph[ManagementUnit, Long] = comp.subgraph(vpred = (vid,mu) => mu.isAvailable(plan,eco))
+    sg.vertices.mapValues(_ / sg.count)
   }
 
-  def totalConversionPropensity()=
+  /**
+  @param ival is the initial value for the propensities
+  @param tcp is the total conversion propensity
+  @return a ListMap containing the choosing cummulative propensity for each management unit 
+  */
+  def propensities(ival: Double,
+                   tcp: Double,
+                   comp: Graph[ManagementUnit, Long],
+                   plan: Graph[PlanningUnit, Long],
+                   eco: Graph[EcoUnit, Long]): ListMap[VertexId,Double] = {
+    val prop: ListMap[VertexId,Double] = ListMap(probabilities(comp,plan,eco).mapValues(_ * tcp).collect.toSeq.sortWith(_._1 < _._1):_*)
+    prop.scanLeft((-1L,ival))( (pre, k -> v) => k -> v + pre._2 ).tail
+  }
 
 }

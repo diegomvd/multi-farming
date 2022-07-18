@@ -13,35 +13,36 @@ object EcoUnit{
   }
 
   /**
-  * @param c1 first land cover type
-  * @param c2 second land cover type
-  * @return true if both covers are equal, false if not
+  @paramc1 first land cover type
+  @paramc2 second land cover type
+  @return true if both covers are equal, false if not
   */
   def matchCover(c1: String, c2: String): Bool = { c1 == c2 }
 
   /**
-  * @param s is the sensitivity to ecosystem service inflow
-  * @param es is the ecosystem service inflow
-  * @param bool determines whether the unit has the right cover
-  * @return the recovery/degradation propensity
+  @params is the sensitivity to ecosystem service inflow
+  @parames is the ecosystem service inflow
+  @parambool determines whether the unit has the right cover
+  @return the recovery/degradation propensity
   */
-  def recoveryEquation(s: Double, es: Double, bool: Bool): Double = {
-    if bool s*es
-    else 0.0
+  def recoveryEquation(s: Double, es: Double): Double = {
+    s*es
   }
-  def degradationEquation(s: Double, es: Double, bool: Bool): Double = {
-    if bool (1-es)*s
-    else 0.0
+  def degradationEquation(s: Double, es: Double): Double = {
+    (1-es)*s
   }
 
-  /**
-  * @param f is either recovery/degradationEquation
-  * @return the propensity given the chosen function
-  */
-  def propensity(s: Double,
-                 es: Double,
-                 bool: Bool,
-                 f: (Double,Double,Bool) => Double) : Double = {
-    f(es,s,bool)
+  def relationESArea(a: Double,
+                     z: Double): Double = {
+    pow(area,z)
+  }
+
+  def resourceLIEquation(y1: Double,
+                         y2: Double,
+                         es: Double): Double = {
+
+  }
+  def resourceHIEquation(): Double = {
+    1.0
   }
 }

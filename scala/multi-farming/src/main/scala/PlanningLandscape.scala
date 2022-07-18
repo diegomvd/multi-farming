@@ -51,9 +51,9 @@ object PlanningLandscape{
   }
 
   /**
-  * @param comp is the composition graph of the selected management unit
-  * @param eco is the composition of the biophysical landscape
-  * @return the number of available neighbors for each available unit
+  @param comp is the composition graph of the selected management unit
+  @param eco is the composition of the biophysical landscape
+  @return the number of available neighbors for each available unit
   */
   def availableNeighbors(comp: Graph[PlanningUnit,Long],
                          eco: Graph[EcoUnit,Long]): VertexRDD[Int] = {
@@ -71,9 +71,9 @@ object PlanningLandscape{
   }
 
   /**
-  * @param comp is the composition graph of the selected management unit
-  * @param eco is the composition of the biophysical landscape
-  * @return the number of unavailable neighbors for each available unit
+  @param comp is the composition graph of the selected management unit
+  @param eco is the composition of the biophysical landscape
+  @return the number of unavailable neighbors for each available unit
   */
   def unavailableNeighbors(comp: Graph[PlanningUnit,Long],
                            eco: Graph[EcoUnit,Long]): VertexRDD[Int] = {
@@ -95,13 +95,8 @@ object PlanningLandscape{
   * with the adjacent pus, at the moment is not extended
   */
   def extendedSubGraph(comp: Graph[PlanningUnit,Long],
-                       sub: VertexRDD[VertexId]){
+                       sub: VertexRDD[VertexId]): Graph[PlanningUnit,Long] = {
     comp.subgraph( vpred = (vid,attr) => sub.contains(vid) )
   }
-
-  /**
-  * calculate the resources
-  */
-  def resources()
 
 }

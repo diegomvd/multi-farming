@@ -8,9 +8,9 @@ import scala.math.pow
 object EcoLandscape{
 
   /**
-  * @param r is the radius of the biophysical landscape
-  * @param ecr is the ecological connectivity range
-  * @return a biophysical composition with every unit in a natural state
+  @paramr is the radius of the biophysical landscape
+  @paramecr is the ecological connectivity range
+  @return a biophysical composition with every unit in a natural state
   */
   def build(r: Int,
             ecr: Int) = Graph[EcoUnit, Long] {
@@ -27,10 +27,10 @@ object EcoLandscape{
   }
 
   /**
-  * @param vids are the vertexId of the units to update
-  * @param cover is the new land cover
-  * @param eco is the biophysical landscape composition
-  * @return the updated composition
+  @paramvids are the vertexId of the units to update
+  @paramcover is the new land cover
+  @parameco is the biophysical landscape composition
+  @return the updated composition
   */
   def updated(vids: VertexRDD[VertexId],
               cover: String
@@ -41,10 +41,10 @@ object EcoLandscape{
   }
 
   /**
-  * @param uid is the vertexId of the unit
-  * @param cover is the new land cover
-  * @param eco is the biophysical landscape composition
-  * @return the updated composition
+  @paramuid is the vertexId of the unit
+  @paramcover is the new land cover
+  @parameco is the biophysical landscape composition
+  @return the updated composition
   */
   def updated(uid: VertexId,
               cover: String
@@ -55,8 +55,8 @@ object EcoLandscape{
   }
 
   /**
-  * @param eco is the biophysical landscape's composition
-  * @return the vertices in the connected components graph
+  @parameco is the biophysical landscape's composition
+  @return the vertices in the connected components graph
   */
   def naturalConnectedComponents(eco: Graph[EcoUnit, Long]) = VertexRDD[VertexId]{
     val natural = eco.subgraph(vpred = (vid,eu) => eu.cover == "Natural")
@@ -64,17 +64,17 @@ object EcoLandscape{
   }
 
   /**
-  * @param ncc is the natural connected components, VertexRDD is over the EcoUnits
+  @paramncc is the natural connected components, VertexRDD is over the EcoUnits
   * and VertexId refers to the component id
-  * @return a map with the number of units in each component
+  @return a map with the number of units in each component
   */
   def nccAreaDistribution(ncc: VertexRDD[VertexId]) = Map[(VertexId,VertexId), Long] {
     ncc.countByValue()
   }
 
   /**
-  * @param size is the total number of EcoUnits in the landscape
-  * @return a biophysical landscape graph with information on the area of the ncc of each node
+  @paramsize is the total number of EcoUnits in the landscape
+  @return a biophysical landscape graph with information on the area of the ncc of each node
   */
   def nccAreaGraph(eco: Graph[EcoUnit, Long],
                    ncc: VertexRDD[VertexId],
@@ -92,9 +92,9 @@ object EcoLandscape{
   }
 
   /**
-  * @param eco_join is the biophysical composition of the landscape joined with the ncc area
-  * @param z is the ES-area scaling exponent
-  * @return an RDD with each unit and the ES flow they receive
+  @parameco_join is the biophysical composition of the landscape joined with the ncc area
+  @paramz is the ES-area scaling exponent
+  @return an RDD with each unit and the ES flow they receive
   */
   def esFlow(eco_join: Graph[(EcoUnit,Double),Long],
              z: Double): VertexRDD[Double] = {
@@ -111,12 +111,12 @@ object EcoLandscape{
   }
 
   /**
-  * @param eco is the biophysical composition of the landscape
-  * @param es is the ecosystem service flow in each EcoUnit
-  * @return a graph joining the ecounits with the ES flow they receive
+  @parameco is the biophysical composition of the landscape
+  @parames is the ecosystem service flow in each EcoUnit
+  @return a graph joining the ecounits with the ES flow they receive
   */
   def esGraph(eco: Graph[EcoUnit,Long],
-              es: VertexRDD[Double]): Graph[EcoUnit,Long] = {
+              es: VertexRDD[Double]): Graph[(EcoUnit,Double),Long] = {
      eco.outerJoinVertices(es){ (vid, eu, es_opt) =>
        es_opt match {
          case Some(es) => (eu, es)
@@ -136,15 +136,39 @@ object EcoLandscape{
   }
 
   /**
-  * @param eco_join is the biophysical composition of the landscape joined with the es flow
-  * @param y1
-  * @param y2
-  * @return the total amount of resources produced in the landscape
+  @parameco_join is the biophysical composition of the landscape joined with the es flow
+  @paramy1
+  @paramy2
+  @return the total amount of resources produced in the low-intensity units
   */
+  def resourcesLI(eco_join: Graph[(EcoUnit,Double),Long],
+                  y1: Double,
+                  y2: Double): Double = {
+    // this function creates a subgraph and then traverses it, another option would be
+    // to traverse the whole graph and match at each node agains the cover to calculate production
+    // i am not sure what is the optimal. Creating a subgraph seems expensive, but at the
+    // same time the subgraph function might be optimized within spark
+    val low_intensity = eco_join.subgraph(vpred = (vid,(eu,_)) => eu.cover == "Low-Intensity")
+    low_intensity.vertices.mapValues{ case (eu, es) => EcoUnit.resourceLIEquation(y1,y2,es) }.reduce( _+_ )
+  }
+
+  /**
+  @parameco_join is the biophysical composition of the landscape joined with the es flow
+  @return the total amount of resources produced in the high-intensity units
+  */
+  def resourcesHI(eco_join: Graph[(EcoUnit,Double),Long]): Double = {
+    // this functions follows the same approach as the low intensity one. However,
+    // due to non-dimensionalization in this model the total high intensity production
+    // is just the number of high-intensity units, maybe it is better to just do that
+    // trade off between clarity of code and execution time
+    val high_intensity = eco_join.subgraph(vpred = (vid,(eu,_)) => eu.cover == "High-Intensity")
+    high_intensity.vertices.mapValues{ case (eu, es) => EcoUnit.resourceHIEquation() }.reduce( _+_ )
+  }
+
   def resources(eco_join: Graph[(EcoUnit,Double),Long],
                 y1: Double,
                 y2: Double): Double = {
-    eco_join.vertices.mapValues{ case (eu, es) => f(es,y1,y2) }.reduce( _+_ )
+    resourcesLI(eco_join,y1,y2) + resourcesHI(eco_join)
   }
 
   def resourcesDirect(eco: Graph[EcoUnit,Long],
@@ -153,51 +177,56 @@ object EcoLandscape{
                       y1: Double,
                       y2: Double): Double = {
     val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,z,size)
-    es_graph.vertices.mapValues{ case (eu, es) => f(es,y1,y2) }.reduce( _+_ )
+    resources(es_graph,y1,y2)
   }
 
   /**
-  * @param ival is the initial value for the cummulative sum
-  * @param eco_join is the biophysical composition of the landscape joined with the es flow
-  * @param s is this transition's sensitivity with es flow
-  * @param c is the land cover type required for this transition
-  * @param f is the function to calculate the propensity of this transition
-  * @return a vertexRDD with the propensity for a certain transition in each EcoUnit of the graph
+  @paramival is the initial value for the cummulative sum
+  @parames_graph is the biophysical composition of the landscape joined with the es flow
+  @params is this transition's sensitivity with es flow
+  @paramc is the land cover type required for this transition
+  @paramf is the function to calculate the propensity of this transition
+  @return a vertexRDD with the propensity for a certain transition in each EcoUnit of the graph
   */
   def propensities(ival: Double,
-                   eco_join: Graph[(EcoUnit,Double),Long],
+                   es_graph: Graph[(EcoUnit,Double),Long],
                    s: Double,
                    c: String,
-                   f: (Double,Double,Bool) => Double): VertexRDD[Double] = {
-    val prop: VectorMap[VertexId,Double] = es_graph.vertices.mapValues{ (id, (eu, esf)) =>
-       EcoUnit.propensity(esf, s, eu.matchCover(c), f) }.collect.toSeq.groupMapReduce(_._1)(_._2)(_+_).sortBy(...)
-    prop.scanLeft(_+_)
+                   f: (Double,Double) => Double): ListMap[VertexId,Double] = {
+    val sg: Graph[(EcoUnit,Double),Long] = es_graph.subgraph(vpred = (_,(eu,_)) => eu.cover == c)
+    val prop: ListMap[VertexId,Double] = ListMap(sg.vertices.mapValues{ (_,(_,es)) =>
+       EcoUnit.propensity(es,s,f) }.collect.toSeq.sortWith(_._1 < _._1):_*)
+    prop.scanLeft(-1L -> ival)( (pre, k -> v) => k -> v + pre._2 ).tail
+    // maybe it is better to scan left on the seq to tail there to then convert to a map
   }
 
   /**
-  This is way sub optimal as th es graph would be calculated again for each type of propensity
+  @param ival is the initial value for the cummulative sum of the spontaneous propensities
+  @param es_graph is the biophysical composition of the landscape joined with the es flow
+  @param s is a tuple of the sensitivities for recovery,degradation and fertility loss transitions
+  @return a tuple with the maps containing the propensities of each transition type and the last propensity value to continue cumulative sums
   */
-  def propensitiesDirect(eco: Graph[EcoUnit,Long],
-                         z: Double,
-                         size: Int,
-                         s: Double,
-                         c: String,
-                         f: (Double,Double,Bool) => Double): VertexRDD[Double] = {
-    val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,es_flow)
-    propensities(es_graph,s,c,f)
+  def allSpontaneous(ival: Double,
+                     es_graph: Graph[(EcoUnit,Double),Long],
+                     s: (Double,Double,Double)): (ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],Double) = {
+    val recovery: ListMap[VertexId,Double] = propensities(ival,es_graph,s._1,"Degraded",EcoUnit.recoveryEquation)
+    val degradation: ListMap[VertexId,Double] = propensities(recovery.last._2,es_graph,s._2,"Natural",EcoUnit.degradationEquation)
+    val li_floss: ListMap[VertexId,Double] = propensities(degradation.last._2,es_graph,s._3,"Low-Intensity",EcoUnit.degradationEquation)
+    val hi_floss: ListMap[VertexId,Double] = propensities(li_floss.last._2,es_graph,s._3,"High-Intensity",EcoUnit.degradationEquation)
+    (recovery._1,degradation._1,li_floss._1,hi_floss._1,hi_floss.last._2)
   }
 
   /**
-  * @param eco is the biophysical landscape graph
-  * @param z is the ecosystem services - area scaling
-  * @param size is the total number of units in the biophysical landscape
-  * @return the degradation propensity for the initialization
+  @param eco is the biophysical landscape graph
+  @param z is the ecosystem services - area scaling
+  @param size is the total number of units in the biophysical landscape
+  @return the degradation propensity for the initialization
   */
   def degradationPropensityInit(eco: Graph[EcoUnit,Long],
                                 z: Double,
                                 size: Int): VertexRDD[Double] = {
     val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,es_flow)
-    propensities(es_graph,1.0,"Natural",EcoUnit.degradationEquation)
+    propensities(0.0,es_graph,1.0,"Natural",EcoUnit.degradationEquation)
   }
 
   def initAgriculturalUnit(eco: Graph[EcoUnit,Long],
@@ -274,13 +303,6 @@ object EcoLandscape{
     }
   }
 
-  def allSpontaneous(ival: Double,
-                     eco_join: Graph[(EcoUnit,Double),Long],
-                     s: (Double,Double,Double)): (VertexRDD[Double],VertexRDD[Double],VertexRDD[Double],Double) = {
-    val recovery: (VertexRDD[Double], Double) = propensities(ival,eco_join,s._1)
-    val degradation: (VertexRDD[Double], Double) = propensities(recovery._2,eco_join,s._2)
-    val fertility_loss: (VertexRDD[Double], Double) = propensities(degradation._2,eco_join,s._3)
-    (recovery._1,degradation._1,fertility_loss._1,fertility_loss._3)
-  }
+
 
 }

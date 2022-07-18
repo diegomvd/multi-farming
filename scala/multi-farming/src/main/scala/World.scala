@@ -11,8 +11,8 @@ case class World(t: Double,
                  pop: Double,
                  args: Parameters){
   /**
-  * @param t is the current time in the simulation
-  * @return a boolean determining whether the simulation should stop or not
+  @paramt is the current time in the simulation
+  @return a boolean determining whether the simulation should stop or not
   */
   def hasNext(t: Double): Boolean = {
     val pred_time: Bool = t > this.args.maxT
@@ -46,16 +46,16 @@ object World{
       EcoLandscape.init(eco_pristine,pln,mng,args.size,args.z,args.fagr,args.fdeg)
 
     val res: Double = EcoLandscape.resources()
-      PlnLandscape.totalResources(pln,eco,args.y_es,args.z,args.his)
+      EcoLandscape.resources(pln,eco,args.y_es,args.z,args.his)
     val pop: Double = HumanPopulation.build(res)
 
     World(eco,pln,mng,pop,args)
   }
 
   /**
-  * @param world is this world
-  * @param eco is the ecological landscape
-  * @return a world with an updated landscape
+  @param world is this world
+  @param eco is the ecological landscape
+  @return a world with an updated landscape
   */
   def updatedEco(world: World,
                  eco: Graph[EcoUnit,Long]): World = {
@@ -63,9 +63,9 @@ object World{
   }
 
   /**
-  * @param world is this world
-  * @param eco is the ecological landscape
-  * @return a world with an updated population
+  @param world is this world
+  @param eco is the ecological landscape
+  @return a world with an updated population
   */
   def updatedPop(world: World,
                  pop: Double): World = {
@@ -73,12 +73,12 @@ object World{
   }
 
   /**
-  * @param pop is the human population propensity
-  * @param rec is the recovery propensity
-  * @param deg is the degradation propensity
-  * @param flo is the fertility loss propensity
-  * @param tmng is the total management propensity
-  * @return the updated world given the propensities
+  @param pop is the human population propensity
+  @param rec is the recovery propensity
+  @param deg is the degradation propensity
+  @param flo is the fertility loss propensity
+  @param tmng is the total management propensity
+  @return the updated world given the propensities
   */
   def updated(pop: (Double,Double),
               rec: (VertexRDD[Double],Double),
@@ -121,11 +121,12 @@ object World{
   def applyPopulationEvent(x_rand: Double,
                            prop: (Double,Double),
                            pop: Double): Double {
-    selectBirthOrDeath(x_rand,pop) match {
+    selectBirthOrDeath(x_rand,prop) match {
       case "Birth" => pop + 1.0
       case "Death" => pop - 1.0
     }
   }
+
   def applySpontaneousEvent(x_rand: Double,
                             prop: VertexRDD[Double],
                             eco: Graph[EcoUnit,Long],
@@ -133,19 +134,26 @@ object World{
     val vid: VertexId = S3Utils.selectVId(x_rand,prop)
     EcoLandscape.updated(vid,cover,eco)
   }
+
   def applyConversionEvent(x_rand: Double,
+                           ival: Double,
                            eco: Graph[EcoUnit,Long],
                            pln: Graph[PlnUnit,Long],
                            mng: Graph[MngUnit,Long],
-                           mngt: Double): Graph[EcoUnit,Long] = {
+                           tcp: Double): Graph[EcoUnit,Long] = {
     val mngp: VertexRDD[Double] =
-     ManagementLandscape.conversionPropensity(mng,pln,eco,mngt)
+     ManagementLandscape.propensities(ival,tcp,mng,pln,eco)
     val mid: VertexId =
      S3Utils.selectVId(rnd_x,mngp)
+
+    val eval: Double = mngp.get(mid)
+    val step: Double = mngp.head._2
+    val ival2: Double = eval-step
     val plnp: VertexRDD[Double] =
-     mng.lookup(mid).conversionPropensity(pln,eco,mngt)
+     mng.lookup(mid).propensities(ival2,step,pln,eco)
     val pid: VertexId =
      S3Utils.selectVId(rnd_x,plnp)
+
     val vids: VertexRDD[VertexId] = pln.lookup(pid)
     mng.lookup(mid).stg match{
      case "Sharing" => EcoLandscape.updated(vids, "Low-intensity", eco)
@@ -154,11 +162,11 @@ object World{
   }
 
   /**
-  * @param x_rand is the random number thrown to sample the distributions
-  * @param spont is the total spontaneous propensity + the population one
-  * @param mng is the total management propensity + spontaneous + population
-  * @param pop is the total population propensity
-  * @return a string identifying the general type of event
+  @param x_rand is the random number thrown to sample the distributions
+  @param spont is the total spontaneous propensity + the population one
+  @param mng is the total management propensity + spontaneous + population
+  @param pop is the total population propensity
+  @return a string identifying the general type of event
   */
   def selectEventGeneralType(x_rand: Double,
                              spont: Double,
@@ -173,9 +181,9 @@ object World{
   }
 
   /**
-  * @param x_rand is the random number thrown to sample the distributions
-  * @param prop contains the birth and death propensities in field 1 and 2 respectively
-  * @return a string with the type of human population event
+  @paramx_rand is the random number thrown to sample the distributions
+  @paramprop contains the birth and death propensities in field 1 and 2 respectively
+  @return a string with the type of human population event
   */
   def selectBirthOrDeath(x_rand: Double,
                          prop: (Double, Double)): String = {
@@ -187,9 +195,9 @@ object World{
   }
 
   /**
-  * @param x_rand is the random number thrown to sample the distributions
-  * @param prop contains the recovery, degradation and fertility loss propensities in field 1,2 and 3 respectively
-  * @return a string with the type of spontaneous land cover transition
+  @paramx_rand is the random number thrown to sample the distributions
+  @paramprop contains the recovery, degradation and fertility loss propensities in field 1,2 and 3 respectively
+  @return a string with the type of spontaneous land cover transition
   */
   def selectSpontaneous(x_rand: Double,
                         prop: (Double,Double,Double)): String = {

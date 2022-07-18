@@ -11,20 +11,21 @@ case class ManagementUnit(comp: VertexRDD[VertexId], stg: String){
     ManagementUnit.isAvailable(this.comp,plan,eco)
   }
 
-  def conversionPropensity(plan: Graph[PlanningUnit,Long],
-                           eco: Graph[EcoUnit,Long],
-                           tcp: Double): VertexRDD[Double] = {
-    ManagementUnit.conversionPropensity(this.comp,plan,eco,this.stg,tcp)
+  def propensities(ival: Double,
+                   utcp: Double,
+                   pln: Graph[PlanningUnit,Long],
+                   eco: Graph[EcoUnit,Long]): VertexRDD[Double] = {
+    ManagementUnit.propensities(ival,utcp,this.comp,pln,eco,this.stg)
   }
 }
 
 object ManagementUnit{
 
   /**
-  * @param comp is the set of planning unit ids belonging to this managament unit: a vertex of the management graph
-  * @param plan is the planning landscape
-  * @param eco is the biophysical landscape
-  * @return true if the management unit is available, false if not
+  @param comp is the set of planning unit ids belonging to this managament unit: a vertex of the management graph
+  @param plan is the planning landscape
+  @param eco is the biophysical landscape
+  @return true if the management unit is available, false if not
   */
   def isAvailable(comp: VertexRDD[VertexId],
                   plan: Graph[PlanningUnit,Long],
@@ -33,18 +34,16 @@ object ManagementUnit{
   }
 
   /**
-  * @param comp is the composition of the management unit
-  * @param plan is the planning landscape composition graph
-  * @param eco is the biophysical landscape composition graph
-  * @param stg is the management strategy of the unit
-  * @param tcp is the total conversion propensity
-  * @return a VertexRDD with the propensity associated to each PU
+  @param comp is the composition of the management unit
+  @param plan is the planning landscape composition graph
+  @param eco is the biophysical landscape composition graph
+  @param stg is the management strategy of the unit
+  @return a VertexRDD with the relative conversion probability associated to each PU
   */
-  def conversionPropensity(comp: VertexRDD[VertexId],
-                           plan: Graph[PlanningUnit,Long],
-                           eco: Graph[EcoUnit,Long],
-                           stg: String,
-                           tcp: Double): VertexRDD[Double] = {
+  def weights(comp: VertexRDD[VertexId],
+              plan: Graph[PlanningUnit,Long],
+              eco: Graph[EcoUnit,Long],
+              stg: String): VertexRDD[Double] = {
 
     val pun = PlanningLandscape.extendedSubGraph(plan,comp)
 
@@ -56,7 +55,22 @@ object ManagementUnit{
     val w_tot = w.reduce(_+_)
     w_tot match {
       case 0.0 => w
-      case _ => w.mapValues(_ / w_tot * tcp)
+      case _ => w.mapValues(_ / w_tot)
     }
+  }
+
+  /**
+  @param ival is the initial value for the cumulative propensities
+  @param utcp is the unit's total conversion propensity
+  @return a ListMap with the cumulative propensities for each pu inside the mu
+  */
+  def propensities(ival: Double,
+                   utcp: Double,
+                   comp: VertexRDD[VertexId],
+                   plan: Graph[PlanningUnit,Long],
+                   eco: Graph[EcoUnit,Long],
+                   stg: String): ListMap[VertexId,Double] = {
+    val prop: ListMap[VertexId,Double] = ListMap(weights(comp,plan,eco,stg).mapValues(_ * utcp).collect.toSeq.sortWith(_._1 < _._1):_*)
+    prop.scanLeft((-1L,ival))((pre, k -> v) => k -> v + pre._2).tail
   }
 }
