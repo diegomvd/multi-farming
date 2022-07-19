@@ -1,7 +1,10 @@
 /**
 This object defines all the functions needed to manipulate the modulo coordinates
-in the hexagonal lattice.
+in the hexagonal lattice. This is used in EcoLandscape to create the ecological
+units in different positions and define their neighborhood to create the composition
+graph of the biophysical landscape.
 */
+
 object ModCo{
 
   def apply(radius: Int) = List[Int] {
