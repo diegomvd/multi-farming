@@ -1,3 +1,11 @@
+/**
+The PlnLandscape object provides all the functions needed to interact with a
+planning landscape represented by a graph of PlnUnits. Key functions are:
+1- Build a planning landscape given the radius of the biophysical landscape
+2- Determine neighbor availability to influence conversion weights
+3- Get all the planning units within a management unit extended by their neighborhood
+*/
+
 import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
@@ -6,7 +14,7 @@ import org.apache.spark.graphx.Graph
 import scala.math.pow
 import scala.math.max
 
-object PlanningLandscape{
+object PlnLandscape{
 
   /**
   * This function is a preliminary computation of the planning landscape's
@@ -16,7 +24,7 @@ object PlanningLandscape{
   *  @param nt is the total number of ecological units in the biophysical landscape
   *  @return a map storing the id and composition of each planning unit
   */
-  def prepareComposition(nu: Int, nt: Int): ParMap[Long, PlanningUnit] = {
+  def buildCompMap(nu: Int, nt: Int): ParMap[Long, PlnUnit] = {
     VoronoiUtils.voronoiTesselation(nu,nt).groupBy( _._2 ).map{ (key, val) =>
       key.toLong -> val.values.toSet
     }.toMap.par
@@ -27,16 +35,16 @@ object PlanningLandscape{
   *  @param r is the radius of the biophysical landscape
   *  @return the composition graph of the planning landscape
   */
-  def buildComposition(nu: Int, r: Int): Graph[PlanningUnit, Long] = {
+  def build(nu: Int, r: Int): Graph[PlnUnit, Long] = {
 
     val nt = 3 * r * r + 3 * r + 1
     val precomp = prepareComposition(nu,nt)
 
     val sc: SparkContext
-    // the units are defined by a vertex id which is the id of the PlanningUnit
+    // the units are defined by a vertex id which is the id of the PlnUnit
     // and a VertexRDD of VertexIds from to the eco composition graph
-    // and representing the EcoUnits belongin to the PlanningUnit.
-    val units: RDD[(VertexId, PlanningUnit)] =
+    // and representing the EcoUnits belongin to the PlnUnit.
+    val units: RDD[(VertexId, PlnUnit)] =
       sc.parallelize( precomp.map{ (_._1,_._2) }.toSeq )
 
     // An edge between 2 PUs exists if PU1 has an adjacent EcoUnit that belongs
@@ -55,7 +63,7 @@ object PlanningLandscape{
   @param eco is the composition of the biophysical landscape
   @return the number of available neighbors for each available unit
   */
-  def availableNeighbors(comp: Graph[PlanningUnit,Long],
+  def availableNeighbors(comp: Graph[PlnUnit,Long],
                          eco: Graph[EcoUnit,Long]): VertexRDD[Int] = {
     comp.aggregateMessages[Int](
       triplet => {
@@ -75,7 +83,7 @@ object PlanningLandscape{
   @param eco is the composition of the biophysical landscape
   @return the number of unavailable neighbors for each available unit
   */
-  def unavailableNeighbors(comp: Graph[PlanningUnit,Long],
+  def unavailableNeighbors(comp: Graph[PlnUnit,Long],
                            eco: Graph[EcoUnit,Long]): VertexRDD[Int] = {
     comp.aggregateMessages[Int](
       triplet => {
@@ -94,8 +102,8 @@ object PlanningLandscape{
   * returns the subgraph of the planning landscape belonging to a management unit
   * with the adjacent pus, at the moment is not extended
   */
-  def extendedSubGraph(comp: Graph[PlanningUnit,Long],
-                       sub: VertexRDD[VertexId]): Graph[PlanningUnit,Long] = {
+  def extendedSubGraph(comp: Graph[PlnUnit,Long],
+                       sub: VertexRDD[VertexId]): Graph[PlnUnit,Long] = {
     comp.subgraph( vpred = (vid,attr) => sub.contains(vid) )
   }
 

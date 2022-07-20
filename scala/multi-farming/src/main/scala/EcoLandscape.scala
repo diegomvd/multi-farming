@@ -314,13 +314,14 @@ object EcoLandscape{
   }
 
   /**
+  This function is used in the world initialization
   @return the total amount of resources produced in the landscape
   */
-  def resourcesDirect(eco: Graph[EcoUnit,Long],
-                      z: Double,
-                      size: Int,
-                      y1: Double,
-                      y2: Double): Double = {
+  def resources(eco: Graph[EcoUnit,Long],
+                z: Double,
+                size: Int,
+                y1: Double,
+                y2: Double): Double = {
     val es_graph: Graph[(EcoUnit,Double),Long] = esGraphDirect(eco,z,size)
     resources(es_graph,y1,y2)
   }
@@ -341,7 +342,7 @@ object EcoLandscape{
     val sg: Graph[(EcoUnit,Double),Long] = es_graph.subgraph(vpred = (_,(eu,_)) => eu.cover == c)
     val prop: ListMap[VertexId,Double] = ListMap(sg.vertices.mapValues{ (_,(_,es)) =>
        EcoUnit.propensity(es,s,f) }.collect.toSeq.sortWith(_._1 < _._1):_*)
-    prop.scanLeft(-1L -> ival)( (pre, k -> v) => k -> v + pre._2 ).tail
+    prop.scanLeft(-1L -> ival)( (pre, k -> v) => k -> v + pre._2 )
     // maybe it is better to scan left on the seq to tail there to then convert to a map
   }
 
@@ -353,11 +354,11 @@ object EcoLandscape{
   */
   def allSpontaneous(ival: Double,
                      es_graph: Graph[(EcoUnit,Double),Long],
-                     s: (Double,Double,Double)): (ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],Double) = {
+                     s: (Double,Double,Double)): ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double) = {
     val recovery: ListMap[VertexId,Double] = propensities(ival,es_graph,s._1,"Degraded",EcoUnit.increasingPES)
     val degradation: ListMap[VertexId,Double] = propensities(recovery.last._2,es_graph,s._2,"Natural",EcoUnit.decreasingPES)
     val li_floss: ListMap[VertexId,Double] = propensities(degradation.last._2,es_graph,s._3,"Low-Intensity",EcoUnit.decreasingPES)
     val hi_floss: ListMap[VertexId,Double] = propensities(li_floss.last._2,es_graph,s._3,"High-Intensity",EcoUnit.decreasingPES)
-    (recovery._1,degradation._1,li_floss._1,hi_floss._1,hi_floss.last._2)
+    ((recovery._1,degradation._1,li_floss._1,hi_floss._1),hi_floss.last._2)
   }
 }
