@@ -46,10 +46,10 @@ object VoronoiTesselation{
   }
 
   def probabilityGraph(assigned: Graph[VertexId, Long],
-                       neighbors: VertexRDD[Double]): Graph[(VertexId,Double), Long] = {
-    assigned.outerJoinVertices(neighbors){ (vid1,vid2,n_opt)=>
-      n_opt match {
-        case Some(n_opt) => (vid2, n_opt)
+                       prob: VertexRDD[Double]): Graph[(VertexId,Double), Long] = {
+    assigned.outerJoinVertices(prob){ (vid1,vid2,prob_opt)=>
+      prob_opt match {
+        case Some(n_opt) => (vid2, prob_opt)
         case None => (vid2, 0.0)
       }
     }
@@ -67,56 +67,35 @@ object VoronoiTesselation{
     probmap.scanLeft(-1L -> 0.0)( (pre, k -> v) => k -> v + pre._2 )
   }
 
-
-    // if a position has already been asigned to a voronoi polygon, then conversion likelihood is 0.0
-    // if a position is not assigned and has assigned neighbors then conversion likelihood is 1.0
-    // else conversion likelihood is 1.0
-    val likelihood = (0 until total).flatMap{
-                        case pos if assigned.exists(_._1 == pos) => pos -> 0.0
-                        case pos if pos.neighbors(r,1).exists(p => assigned.exists( _.contains(p) ) ) => pos -> 1.0
-                        case other => pos -> 0.0
-                     }.toMap.par
-    val total_prob = non_norm_prob.sum[Int >: (ModuloCoord,Int)]( _._2 + _._2  )
-    non_norm_prob.map( case (pos, x) => pos -> x/total_prob).toMap.par
-  }
-
-
-  /**
-  @param n_seeds is the number of voronoi seeds to effectuate the tesselation
-  @param total is the total number of units over which the tesselation is done
-  @return a map with keys the Id of the seeds position and value the identifier
-          for the voronoi polygon which is the Id
-  */
-  def seed(n_seeds: Int,
-           total: Int): ParMap[Int, Int] = {
-    rnd.shuffle(0 until total).take(n_seeds).flatMap(_ => _ -> _ ).toMap.par
-  }
-
-  /**
-  TODO: this function needs to be abstracted to account for different neighbor
-  functions
-  */
-  def probabilities(total: Int,
-                    asigned: ParMap[Int, Int]) = ParMap[Int, Double] {
-    // if a position has already been asigned to a voronoi polygon, then conversion likelihood is 0.0
-    // if a position is not assigned and has assigned neighbors then conversion likelihood is 1.0
-    // else conversion likelihood is 1.0
-    val likelihood = (0 until total).flatMap{
-                        case pos if asigned.exists(_._1 == pos) => pos -> 0.0
-                        case pos if pos.neighbors(r,1).exists(p => asigned.exists( _.contains(p) ) ) => pos -> 1.0
-                        case other => pos -> 0.0
-                     }.toMap.par
-    val total_prob = non_norm_prob.sum[Int >: (ModuloCoord,Int)]( _._2 + _._2  )
-    non_norm_prob.map( case (pos, x) => pos -> x/total_prob).toMap.par
-  }
-
   @tailrec
-  def voronoiRadialGrowth(radius: Int, cells: ParMap[ModuloCoord, Int]) = ParMap[ModuloCoord, Int]{
-    val area = 3 * radius * radius + 3 * radius + 1
-    if (cells.size() >= area) cells
+  def tesselation(n_seeds: Int,
+                  base: Graph[A,Long]) = Graph[VertexId, Long]{
+
+    val assigned = seeded(n_seeds,base)
+    val cum_prob = cummulativeProbabilities( probabilityGraph( assigned, probabilities(assigned) ) )
+
+
+    def rec(assigned: Graph[VertexId, Long]): Graph[VertexId, Long]{
+      val remaining: Int = assigned.vertices.countBy(_._2 == -1L)
+
+      if (remaining >= 0.0) { assigned }
+      else{
+        val cum_prob = cummulativeProbabilities( probabilityGraph( assigned, probabilities(assigned) ) )
+        val pos = S3Utils.positionSelector( cumProb )
+        val pol = S3Utils.polygonSelector( pos, assigned )
+
+        val new_graph = assigned.mapValues( case (vid,attr) if vid == pos => pos -> pol )
+        rec( new_graph)
+      }
+    }
+
+    if (remaining >= 0.0) { assigned }
     else{
-      val pos = S3Utils.positionSelector( voronoiProbability(radius, cells) )
-      val cell = S3Utils.eventSelector( radius, pos, cells )
+      val seeds = seeded(n_seeds,base)
+
+
+      val pos = S3Utils.positionSelector( cumProb )
+      val pol = S3Utils.polygonSelector( radius, pos, cells )
       val new_cells = cells.map( case (_,id) => pos -> id ).toMap.par
       voronoiRadialGrowth( radius, pos, new_cells)
     }
