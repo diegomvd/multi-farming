@@ -11,21 +11,91 @@ case class World(t: Double,
                  pop: Int,
                  args: Parameters){
   /**
-  @param t is the current time in the simulation
+  This functions terminates execution of the simulation if:
+   -time exceeds maximum
+   -human population size reaches 0
+   -number of natural cells reaches 0
+   -landscape is pristine and population size 0
   @return a boolean determining whether the simulation should stop or not
   */
-  def hasNext(): Boolean = {
+  def doesNotHaveNext(): Boolean = {
     val pred_time: Bool = this.t > this.args.maxT
     val pred_pop: Bool = this.pop == 0
-    val pred_nat: Bool = this.eco.countNatural() == 0
-    val pred_deg: Bool = this.eco.countNatural() == this.args.size
-    !(pred_time || pred_pop || pred_nat || pred_deg)
+    val pred_deg: Bool = this.eco.countNatural() == 0
+    val pred_nat: Bool = this.eco.countNatural() == this.args.size
+    (pred_time || pred_pop || pred_deg || (pred_nat && pred_pop))
   }
 
+  /**
+  This function updates the world given the events' propensities
+  @return an updated world
+  */
   def updated(pop: (Double,Double),
               spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
               tcp: Double): World = {
     World.updated(pop,spont,tcp,this)
+  }
+
+  /**
+  This function runs the world's dynamics:
+  1- Get the natural connected components
+  2- Get the ecosystem services flow
+  3- Get resource production
+  4- Calculate propensities
+  5- Update the world
+  @return the state of the world
+  */
+  def run(): World = {
+
+    // Get the natural connected components
+    val ncc = EcoLandscape.naturalConnectedComponents(this.eco)
+    val ncc_area = EcoLandscape.nccAreaDistribution(ncc)
+    val area_graph = Ecolandscape.nccAreaGraph(this.eco,ncc,ncc_area,this.args.size)
+
+    // Get the ecosystem services flow
+    val es_flow = EcoLandscape.esFlow(area_graph,this.args.z)
+    val es_graph = EcoLandscape.esGraph(this.eco,es_flow)
+
+    // Get resource production
+    val res = EcoLandscape.resources(es_graph,this.args.y_es,this.args.his)
+
+    // Get population propensities
+    val popp = HumanPop.propensities(0.0,this.pop,res)
+
+    // Get spontaneous propensities
+    val spontp= EcoLandscape.allSpontaneous(pop_P._2,es_graph,(this.args.s1,this.args.s2,this.args.s3))
+
+    // Get total conversion propensity: check if ival should be here or it is in the function
+    val tcp = this.args.s4 * HumanPop.resourceDemand(this.pop,res)
+
+    def rec(world: World,
+            ncc: ,
+            ncc_area: ,
+            area_graph: ,
+            es_flow: ,
+            es_graph: ,
+            res: ,
+            popp: ,
+            spontp: ,
+            tcp: ): World = {
+      if world.doesNotHaveNext() { world }
+      else {
+        val new_world: (World, String) = world.updated(popp,spontp,tcp)
+        new_world._2 match {
+          case "Population" => {
+
+          }
+          case "Spontaneous" => {
+
+          }
+          case "Conversion" => {
+
+          }
+        }
+        rec(new_world,new_ncc,new_ncc_area,new_area_graph,new_es_flow,new_es_graph,new_res,new_popp,new_spontp,new_tcp)
+      }
+    }
+    rec(this,ncc,ncc_area,area_graph,es_flow,es_graph,res,popp,spontp,tcp)
   }
 
 }
