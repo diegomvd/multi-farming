@@ -67,14 +67,13 @@ object VoronoiTesselation{
     probmap.scanLeft(-1L -> 0.0)( (pre, k -> v) => k -> v + pre._2 )
   }
 
-  @tailrec
+
   def tesselation(n_seeds: Int,
                   base: Graph[A,Long]) = Graph[VertexId, Long]{
 
     val assigned = seeded(n_seeds,base)
-    val cum_prob = cummulativeProbabilities( probabilityGraph( assigned, probabilities(assigned) ) )
 
-
+    @tailrec
     def rec(assigned: Graph[VertexId, Long]): Graph[VertexId, Long]{
       val remaining: Int = assigned.vertices.countBy(_._2 == -1L)
 
@@ -85,20 +84,10 @@ object VoronoiTesselation{
         val pol = S3Utils.polygonSelector( pos, assigned )
 
         val new_graph = assigned.mapValues( case (vid,attr) if vid == pos => pos -> pol )
-        rec( new_graph)
+        rec(new_graph)
       }
     }
-
-    if (remaining >= 0.0) { assigned }
-    else{
-      val seeds = seeded(n_seeds,base)
-
-
-      val pos = S3Utils.positionSelector( cumProb )
-      val pol = S3Utils.polygonSelector( radius, pos, cells )
-      val new_cells = cells.map( case (_,id) => pos -> id ).toMap.par
-      voronoiRadialGrowth( radius, pos, new_cells)
-    }
+    rec(assigned)
   }
 
   def voronoiTesselation(n_seeds: Int, radius: Int) = ParMap[ModuloCoord,Int]{
