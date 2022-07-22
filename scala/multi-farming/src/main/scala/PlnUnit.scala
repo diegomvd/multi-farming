@@ -31,7 +31,7 @@ object PlnUnit {
   /**
   @param r is the radius of the biophysical landscape
   @param comp the composition of the planning unit
-  @return an RDD with th IDs of each ecological unit adjacent to the planning unit
+  @return an RDD with the IDs of each ecological unit adjacent to the planning unit
   */
   def adjacent(r: Int,
                comp: VertexRDD[VertexId]): VertexRDD[VertexId] = {

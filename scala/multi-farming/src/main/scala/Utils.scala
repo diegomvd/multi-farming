@@ -53,7 +53,6 @@ object VoronoiTesselation{
         case None => (vid2, 0.0)
       }
     }
-
   }
 
   /**
@@ -67,9 +66,37 @@ object VoronoiTesselation{
     probmap.scanLeft(-1L -> 0.0)( (pre, k -> v) => k -> v + pre._2 )
   }
 
+  def groupByPolygon(dispersed: Graph[VertexId, Long]): RDD[(VertexId, Iterable[VertexId])] = {
+    // The first vertexId is the PolygonId
+    // The second vertexId is the base unit Id
+    // The third vertexId is also the PolygonId
+    val grouped: RDD[( VertexId, Iterable[(VertexId, VertexId)] )] =
+      dispersed.vertices.groupBy{
+        (vidUnit,vidPolygon) => vidPolygon
+      }
+    // We only want to recover the sequence of base unit Ids and polygon Id
+    grouped.mapValues{ (vid1, it) =>
+      (vid1, it.map{ (vid2,vid3) => vid2 } )
+    }.reindex
+  }
+
+  def newEdges(vertices: RDD[(VertexId, Iterable[VertexId])],
+               base: Graph[A,Long]): RDD[Edge[Long]] = {
+
+    val nids = base.collectNeighborIds(equals)
+
+    // this gets an RDD with all the combinations of 2
+    vertices.cartesian(vertices).filter{ case (a,b) =>
+     // this removes duplicates and combination of same vids
+     (a._1 < b._1) || (a._1 == b._1)
+     // now I should check if it exists a vid in iterable a that has as neighbor any vid in iterable b
+    }.collect{ case (a, b) if a._2.exists( nids.lookup(_).exists(b._2.contains(_)) ) =>
+     Edge(a._1,b._1,OL)
+    }
+  }
 
   def tesselation(n_seeds: Int,
-                  base: Graph[A,Long]) = Graph[VertexId, Long]{
+                  base: Graph[A,Long]): Graph[Iterable[A], Long] = {
 
     val assigned = seeded(n_seeds,base)
 
@@ -87,12 +114,13 @@ object VoronoiTesselation{
         rec(new_graph)
       }
     }
-    rec(assigned)
+    val assigned_graph: Graph[VertexId, Long] = rec(assigned)
+    val vertices: RDD[(VertexId, Iterable[VertexId])] = groupByPolygon(assignedGraph)
+    val edges: RDD[Edge[Long]] = newEdges(vertices,base)
+    Graph(vertices,edges)
   }
+}
 
-  def voronoiTesselation(n_seeds: Int, radius: Int) = ParMap[ModuloCoord,Int]{
-    VoronoiUtils.voronoiRadialGrowth(radius, VoronoiUtils.seedVoronoiTesselation(n_seeds,radius))
-  }
 
 object S3Utils{ // utility functions for spatial stochastic simulations
 

@@ -17,45 +17,14 @@ import scala.math.max
 object PlnLandscape{
 
   /**
-  * This function is a preliminary computation of the planning landscape's
-  * composition.
-  *  TODO: abstract voronoiTesselation
-  *  @param nu is the number of planning units to create
-  *  @param nt is the total number of ecological units in the biophysical landscape
-  *  @return a map storing the id and composition of each planning unit
+  @param nu is the number of planning units to create
+  @param eco is the biophysical landscape
+  @return the composition graph of the planning landscape
+  TODO: the tesselation returns a Graph of iterables of vertex instead of vertexRDD, must check if this is a problem or if PLUnits could be VertexRDDs
   */
-  def buildCompMap(nu: Int, nt: Int): ParMap[Long, PlnUnit] = {
-    VoronoiUtils.voronoiTesselation(nu,nt).groupBy( _._2 ).map{ (key, val) =>
-      key.toLong -> val.values.toSet
-    }.toMap.par
-  }
-
-  /**
-  *  @param nu is the number of planning units to create
-  *  @param r is the radius of the biophysical landscape
-  *  @return the composition graph of the planning landscape
-  */
-  def build(nu: Int, r: Int): Graph[PlnUnit, Long] = {
-
-    val nt = 3 * r * r + 3 * r + 1
-    val precomp = prepareComposition(nu,nt)
-
-    val sc: SparkContext
-    // the units are defined by a vertex id which is the id of the PlnUnit
-    // and a VertexRDD of VertexIds from to the eco composition graph
-    // and representing the EcoUnits belongin to the PlnUnit.
-    val units: RDD[(VertexId, PlnUnit)] =
-      sc.parallelize( precomp.map{ (_._1,_._2) }.toSeq )
-
-    // An edge between 2 PUs exists if PU1 has an adjacent EcoUnit that belongs
-    // to PU2
-    val edges: RDD[Edge[Long]] =
-      sc.parallelize( precomp.toSet.subsets(2).collect{ // using subsets guarantees no repeated operation
-        case (pu1,pu2) if pu1._2.adjacent(r).exists(_ == pu2._2) =>
-          Edge(pu1._1,pu2._1,0L)
-        }
-      )
-    Graph(units,edges)
+  def build(nu: Int,
+            eco: Graph[EcoUnit,Long]): Graph[PlnUnit,Long] = {
+    VoronoiUtils.tesselation(nu,eco).mapValues(PlnUnit(_))
   }
 
   /**
