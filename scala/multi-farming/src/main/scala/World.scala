@@ -68,6 +68,7 @@ case class World(t: Double,
     // Get total conversion propensity: check if ival should be here or it is in the function
     val tcp = this.args.s4 * HumanPop.resourceDemand(this.pop,res)
 
+    @tailrec
     def rec(world: World,
             ncc: ,
             ncc_area: ,
@@ -201,7 +202,7 @@ object World{
                             prop: ListMap[VertexId,Double],
                             eco: Graph[EcoUnit,Long],
                             cover: String): Graph[EcoUnit,Long] = {
-    val vid: VertexId = S3Utils.selectVId(x_rnd,prop)
+    val vid: VertexId = StochSimUtils.selectVId(x_rnd,prop)
     EcoLandscape.updated(vid,cover,eco)
   }
 
@@ -214,7 +215,7 @@ object World{
     val mngp: ListMap[VertexId,Double] =
      MngLandscape.propensities(ival,tcp,mng,pln,eco)
     val vid: VertexId =
-     S3Utils.selectVId(rnd_x,mngp)
+     StochSimUtils.selectVId(x_rnd,mngp)
 
     val max: Double = mngp.get(vid)
     // this approach works because every management unit can be selected with
@@ -224,7 +225,7 @@ object World{
     val plnp: VertexRDD[Double] =
      mng.lookup(mid).propensities(ival2,step,pln,eco)
     val pid: VertexId =
-     S3Utils.selectVId(rnd_x,plnp)
+     StochSimUtils.selectVId(x_rnd,plnp)
 
     val vids: VertexRDD[VertexId] = pln.lookup(pid)
     mng.lookup(mid).stg match{
@@ -280,4 +281,3 @@ object World{
       case other => println(s"selectSpontaneous: Cannot select a transition, propensity upper bound in the selector is larger than expected.")
   }
 }
-// val parameters = InputOutput.parseArgs(args)

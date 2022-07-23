@@ -72,7 +72,7 @@ object PlnLandscape{
   * with the adjacent pus, at the moment is not extended
   */
   def extendedSubGraph(comp: Graph[PlnUnit,Long],
-                       sub: VertexRDD[VertexId]): Graph[PlnUnit,Long] = {
+                       sub: ParVector[VertexId]): Graph[PlnUnit,Long] = {
     comp.subgraph( vpred = (vid,attr) => sub.contains(vid) )
   }
 

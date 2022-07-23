@@ -15,8 +15,11 @@ import org.apache.spark.graphx.Graph
 import scala.math.pow
 import scala.math.max
 
-case class PlnUnit(comp: VertexRDD[VertexId]){
+case class PlnUnit(comp: ParVector[VertexId]){
 
+  /**
+  I don't know if adjacent makes sense anymore
+  */
   def adjacent(r: Int): VertexRDD[VertexId] = {
     PlnUnit.adjacent(r,this.comp)
   }
@@ -34,7 +37,7 @@ object PlnUnit {
   @return an RDD with the IDs of each ecological unit adjacent to the planning unit
   */
   def adjacent(r: Int,
-               comp: VertexRDD[VertexId]): VertexRDD[VertexId] = {
+               comp: ParVector[VertexId]): VertexRDD[VertexId] = {
     comp.mapValues( ModCo.neighbors(_.toInt,r,1) ).filterNot(comp.exists(_))
   }
 
@@ -43,7 +46,7 @@ object PlnUnit {
   @param eco is the composition of the biophysical landscape
   @return true if the planning unit can be cultivated, false if not
   */
-  def isAvailable(comp: VertexRDD[VertexId],
+  def isAvailable(comp: ParVector[VertexId],
                   eco: Graph[EcoUnit,Long]): Bool = {
     comp.exists( eco.vertices.lookup(_).cover == "Natural") && comp.forall{ (eco.vertices.lookup(_).cover == "Natural" || eco.vertices.lookup(_).cover == "Degraded") }
   }

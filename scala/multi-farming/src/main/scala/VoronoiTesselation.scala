@@ -73,7 +73,7 @@ object VoronoiTesselation{
     probmap.scanLeft(-1L -> 0.0)( (pre, k -> v) => k -> v + pre._2 )
   }
 
-  def groupByPolygon(dispersed: Graph[VertexId, Long]): RDD[(VertexId, Iterable[VertexId])] = {
+  def groupByPolygon(dispersed: Graph[VertexId, Long]): RDD[(VertexId, ParVector[VertexId])] = {
     // The first vertexId is the PolygonId
     // The second vertexId is the base unit Id
     // The third vertexId is also the PolygonId
@@ -83,14 +83,14 @@ object VoronoiTesselation{
       }
     // We only want to recover the sequence of base unit Ids and polygon Id
     grouped.mapValues{ (vid1, it) =>
-      (vid1, it.map{ (vid2,vid3) => vid2 } )
+      (vid1, it.map{ (vid2,vid3) => vid2 }.toVector.par )
     }.reindex
   }
 
-  def newEdges(vertices: RDD[(VertexId, Iterable[VertexId])],
+  def newEdges(vertices: RDD[(VertexId, ParVector[VertexId])],
                base: Graph[A,Long]): RDD[Edge[Long]] = {
 
-    val nids = base.collectNeighborIds(equals)
+    val nids = base.collectNeighborIds(EdgeDirection.both)
 
     // this gets an RDD with all the combinations of 2
     vertices.cartesian(vertices).filter{ case (a,b) =>
@@ -102,8 +102,13 @@ object VoronoiTesselation{
     }
   }
 
+  def selectGrowingPolygon(vid: VertexId,
+                           assigned: Graph[VertexId, Long]): VertexId = {
+    rnd.shuffle(assigned.collectNeighbors(EdgeDirection.both).lookup(vid)).take(1)
+  }
+
   def tesselation(n_seeds: Int,
-                  base: Graph[A,Long]): Graph[Iterable[A], Long] = {
+                  base: Graph[A,Long]): Graph[ParVector[A], Long] = {
 
     val assigned = seeded(n_seeds,base)
 
@@ -114,8 +119,9 @@ object VoronoiTesselation{
       if (remaining >= 0.0) { assigned }
       else{
         val cum_prob = cummulativeProbabilities( probabilityGraph( assigned, probabilities(assigned) ) )
-        val pos = S3Utils.positionSelector( cumProb )
-        val pol = S3Utils.polygonSelector( pos, assigned )
+        val x_rnd: Double = rnd.nextDouble(cum_prob.last._2)
+        val pos = StochSimUtils.selectVId( x_rnd, cumProb )
+        val pol = selectGrowingPolygon( pos, assigned )
 
         val new_graph = assigned.mapValues( case (vid,attr) if vid == pos => pos -> pol )
         rec(new_graph)

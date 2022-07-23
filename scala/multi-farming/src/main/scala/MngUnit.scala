@@ -14,7 +14,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
-case class MngUnit(comp: VertexRDD[VertexId], stg: String){
+case class MngUnit(comp: ParVector[VertexId], stg: String){
 
   def isAvailable(plan: Graph[PlnUnit,Long],
                   eco: Graph[EcoUnit,Long]): Bool = {
@@ -39,7 +39,7 @@ object MngUnit{
   @param eco is the biophysical landscape
   @return true if the management unit is available, false if not
   */
-  def isAvailable(comp: VertexRDD[VertexId],
+  def isAvailable(comp: ParVector[VertexId],
                   pln: Graph[PlnUnit,Long],
                   eco: Graph[EcoUnit,Long]) : Bool = {
     comp.exists{  pln.lookup(_).comp.isAvailable(eco) }
@@ -52,7 +52,7 @@ object MngUnit{
   @param stg is the management strategy of the unit
   @return a VertexRDD with the relative conversion probability associated to each PU
   */
-  def weights(comp: VertexRDD[VertexId],
+  def weights(comp: ParVector[VertexId],
               pln: Graph[PlnUnit,Long],
               eco: Graph[EcoUnit,Long],
               stg: String): VertexRDD[Double] = {
@@ -92,7 +92,7 @@ object MngUnit{
   */
   def propensities(ival: Double,
                    utcp: Double,
-                   comp: VertexRDD[VertexId],
+                   comp: ParVector[VertexId],
                    pln: Graph[PlnUnit,Long],
                    eco: Graph[EcoUnit,Long],
                    stg: String): ListMap[VertexId,Double] = {

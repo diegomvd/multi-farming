@@ -19,8 +19,8 @@ object MngLandscape{
   @return a map storing each management unit's composition and their ids
   **/
   def build(nm: Int,
-                       pln: Graph[PlnUnit,Long],
-                       fs: Double): Graph[MngUnit,Long] = {
+            pln: Graph[PlnUnit,Long],
+            fs: Double): Graph[MngUnit,Long] = {
     val tess_graph: Graph[Iterable[PlnUnit],Long] = VoronoiUtils.tesselation(nm,pln)
     val sparing_ids: VertexRDD[Iterable[PlnUnit]] = rnd.shuffle(tess_graph.vertices).take((fs * nm).toInt)
     tess_graph.mapValues{ (vid,it) =>
