@@ -128,8 +128,8 @@ object World{
   */
   def updatedEco(world: World,
                  new_t: Double,
-                 eco: Graph[EcoUnit,Long]): World = {
-    world.copy(new_t,eco,world.pln,world.mng,world.pop,world.args)
+                 new_eco: Graph[EcoUnit,Long]): World = {
+    world.copy(t = new_t, eco = new_eco)
   }
 
   /**
@@ -139,8 +139,8 @@ object World{
   */
   def updatedPop(world: World,
                  new_t: Double,
-                 pop: Double): World = {
-    world.copy(new_t,world.eco,world.pln,world.mng,pop,world.args)
+                 new_pop: Double): World = {
+    world.copy(t = new_t, pop = new_pop)
   }
 
   /**
@@ -279,5 +279,6 @@ object World{
       case x if x < prop._2 => "Degradation"
       case x if x < prop._3 => "FertilityLoss"
       case other => println(s"selectSpontaneous: Cannot select a transition, propensity upper bound in the selector is larger than expected.")
+    }
   }
 }
