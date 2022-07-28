@@ -32,7 +32,7 @@ case class World(t: Double,
   */
   def updated(pop: (Double,Double),
               spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
-              tcp: Double): World = {
+              tcp: Double): (World,String) = {
     World.updated(pop,spont,tcp,this)
   }
 
@@ -63,37 +63,61 @@ case class World(t: Double,
     val popp = HumanPop.propensities(0.0,this.pop,res)
 
     // Get spontaneous propensities
-    val spontp= EcoLandscape.allSpontaneous(pop_P._2,es_graph,(this.args.s1,this.args.s2,this.args.s3))
+    val spontp= EcoLandscape.allSpontaneous(popp._2,es_graph,(this.args.s1,this.args.s2,this.args.s3))
 
     // Get total conversion propensity: check if ival should be here or it is in the function
     val tcp = this.args.s4 * HumanPop.resourceDemand(this.pop,res)
 
     @tailrec
     def rec(world: World,
-            ncc: ,
-            ncc_area: ,
-            area_graph: ,
-            es_flow: ,
-            es_graph: ,
-            res: ,
-            popp: ,
-            spontp: ,
-            tcp: ): World = {
+            ncc: VertexRDD[VertexId],
+            ncc_area: Map[(VertexId,VertexId), Long],
+            area_graph: Graph[(EcoUnit,Double), Long],
+            es_flow:  VertexRDD[Double],
+            es_graph: Graph[(EcoUnit,Double),Long],
+            res: Double,
+            popp: (Double,Double),
+            spontp: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
+            tcp: Double): World = {
       if world.doesNotHaveNext() { world }
       else {
         val new_world: (World, String) = world.updated(popp,spontp,tcp)
         new_world._2 match {
           case "Population" => {
-
+            val new_ncc = ncc
+            val new_ncc_area = ncc_area
+            val new_area_graph = area_graph
+            val new_es_flow = es_flow
+            val new_es_graph = es_graph
+            val new_res = res
+            val new_popp = HumanPop.propensities(0.0,new_world._1.pop,res)
+            val new_spontp = spontp
+            val new_tcp = world.args.s4 * HumanPop.resourceDemand(new_pop,res)
           }
-          case "Spontaneous" => {
-
+          case "Landscape-ESmod" => {
+            val new_ncc = EcoLandscape.naturalConnectedComponents(new_world._1.eco)
+            val new_ncc_area = EcoLandscape.nccAreaDistribution(new_ncc)
+            val new_area_graph = Ecolandscape.nccAreaGraph(new_world._1.eco,new_ncc,new_ncc_area,new_world._1.args.size)
+            val new_es_flow = EcoLandscape.esFlow(new_area_graph,new_world._1.args.z)
+            val new_es_graph = EcoLandscape.esGraph(new_world._1.eco,new_es_flow)
+            val new_res = EcoLandscape.resources(es_graph,new_world._1.args.y_es,new_world._1.args.his)
+            val new_popp = HumanPop.propensities(0.0,new_world._1.pop,new_res)
+            val new_spontp = EcoLandscape.allSpontaneous(new_popp._2,new_es_graph,(new_world._1.args.s1,new_world._1.args.s2,new_world._1.args.s3))
+            val new_tcp = new_world._1.args.s4 * HumanPop.resourceDemand(new_world._1.pop,new_res)
           }
-          case "Conversion" => {
-
+          case "Landscape-ESnomod" => {
+            val new_ncc = ncc
+            val new_ncc_area = ncc_area
+            val new_area_graph = area_graph
+            val new_es_flow = es_flow
+            val new_es_graph = es_graph
+            val new_res = res - 1.0 // this is just loosing one high intensity unit
+            val new_popp = HumanPop.propensities(0.0,new_world._1.pop,new_res)
+            val new_spontp = EcoLandscape.allSpontaneous(new_popp._2,new_es_graph,(new_world._1.args.s1,new_world._1.args.s2,new_world._1.args.s3))
+            val new_tcp = new_world._1.args.s4 * HumanPop.resourceDemand(new_world._1.pop,new_res)
           }
         }
-        rec(new_world,new_ncc,new_ncc_area,new_area_graph,new_es_flow,new_es_graph,new_res,new_popp,new_spontp,new_tcp)
+        rec(new_world._1,new_ncc,new_ncc_area,new_area_graph,new_es_flow,new_es_graph,new_res,new_popp,new_spontp,new_tcp)
       }
     }
     rec(this,ncc,ncc_area,area_graph,es_flow,es_graph,res,popp,spontp,tcp)
@@ -105,7 +129,7 @@ object World{
 
   def apply(args: Parameters): World = {
 
-    val eco_pristine: Graph[EcoUnit,Long] = EcoLandscape.build(args.r,args.ecr)
+    val eco_pristine: Graph[EcoUnit,Long] = EcoLandscape.natural(args.r,args.ecr)
     val npu: Int = args.pscale/args.size
     val pln: Graph[PlnUnit,Long] = PlnLandscape.build(npu,args.r)
     val nmu: Int = args.mscale/args.size
@@ -154,7 +178,7 @@ object World{
   def updated(pop: (Double,Double),
               spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
               tcp: Double,
-              world: World): World = {
+              world: World): (World, String) = {
 
     val new_t: Double = world.t - 1/log(rnd.nextDouble(pop._2 + spont._5 + tcp))
     // random number to select an event, maximum is the sum of the cumulative propensities
@@ -163,28 +187,32 @@ object World{
     selectEventGeneralType(x_rnd,pop._2,spont._2,tcp) match {
       case "Population" => {
         val upd_pop: Int = applyPopulationEvent(x_rnd,pop,world.pop)
-        updatedPop(world,new_t,upd_pop)
+        (updatedPop(world,new_t,upd_pop),"Population")
       }
       case "Spontaneous" => {
         selectSpontaneous(x_rnd,spont._1) match {
           case "Recovery" => {
             val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._1,eco,"Natural")
+            val event = "Landscape-ESmod"
           }
           case "Degradation" => {
             val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._2,eco,"Degraded")
+            val event = "Landscape-ESmod"
           }
           case "FertilityLossLow" => {
             val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._3,eco,"Natural")
+            val event = "Landscape-ESmod"
           }
           case "FertilityLossHigh" => {
             val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._4,eco,"Degraded")
+            val event = "Landscape-ESnomod"
           }
         }
-        updatedEco(world,new_t,upd_eco)
+        (updatedEco(world,new_t,upd_eco),event)
       }
       case "Conversion" => {
         val upd_eco: Graph[EcoUnit,Long] = applyConversionEvent(x_rnd,spont._2,world.eco,world.pln,world.mng,tcp)
-        updatedEco(world,new_t,upd_eco)
+        (updatedEco(world,new_t,upd_eco),"Landscape-ESmod")
       }
     }
   }

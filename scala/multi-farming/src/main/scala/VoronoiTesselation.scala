@@ -11,7 +11,36 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
-object VoronoiTesselation{
+trait VoronoiTesselation :
+
+  def tesselate(
+    n_seeds: Int,
+    base: Graph[A,Long]): Graph[ParVector[A], Long] = {
+
+    val assigned = VoronoiTesselation.seeded(n_seeds,base)
+
+    @annotation.tailrec
+    def rec(assigned: Graph[VertexId, Long]): Graph[VertexId, Long]{
+      val remaining: Int = assigned.vertices.countBy(_._2 == -1L)
+
+      if (remaining >= 0.0) { assigned }
+      else{
+        val cum_prob = VoronoiTesselation.cummulativeProbabilities( VoronoiTesselation.probabilityGraph( assigned, VoronoiTesselation.probabilities(assigned) ) )
+        val x_rnd: Double = rnd.nextDouble(cum_prob.last._2)
+        val pos = StochSimUtils.selectVId( x_rnd, cumProb )
+        val pol = VoronoiTesselation.selectGrowingPolygon( pos, assigned )
+
+        val new_graph = assigned.mapValues( case (vid,attr) if vid == pos => pos -> pol )
+        rec(new_graph)
+      }
+    }
+    val assigned_graph: Graph[VertexId, Long] = rec(assigned)
+    val vertices: RDD[(VertexId, Iterable[VertexId])] = VoronoiTesselation.groupByPolygon(assignedGraph)
+    val edges: RDD[Edge[Long]] = VoronoiTesselation.newEdges(vertices,base)
+    Graph(vertices,edges)
+  }
+
+object VoronoiTesselation :
 
   /**
   The function preserves graph structure but changes vertex attributes by the Id
@@ -106,30 +135,4 @@ object VoronoiTesselation{
                            assigned: Graph[VertexId, Long]): VertexId = {
     rnd.shuffle(assigned.collectNeighbors(EdgeDirection.both).lookup(vid)).take(1)
   }
-
-  def tesselation(n_seeds: Int,
-                  base: Graph[A,Long]): Graph[ParVector[A], Long] = {
-
-    val assigned = seeded(n_seeds,base)
-
-    @tailrec
-    def rec(assigned: Graph[VertexId, Long]): Graph[VertexId, Long]{
-      val remaining: Int = assigned.vertices.countBy(_._2 == -1L)
-
-      if (remaining >= 0.0) { assigned }
-      else{
-        val cum_prob = cummulativeProbabilities( probabilityGraph( assigned, probabilities(assigned) ) )
-        val x_rnd: Double = rnd.nextDouble(cum_prob.last._2)
-        val pos = StochSimUtils.selectVId( x_rnd, cumProb )
-        val pol = selectGrowingPolygon( pos, assigned )
-
-        val new_graph = assigned.mapValues( case (vid,attr) if vid == pos => pos -> pol )
-        rec(new_graph)
-      }
-    }
-    val assigned_graph: Graph[VertexId, Long] = rec(assigned)
-    val vertices: RDD[(VertexId, Iterable[VertexId])] = groupByPolygon(assignedGraph)
-    val edges: RDD[Edge[Long]] = newEdges(vertices,base)
-    Graph(vertices,edges)
-  }
-}
+end VoronoiTesselation
