@@ -7,14 +7,12 @@ import org.apache.spark.graphx.Graph
 trait Landscape:
 
   val composition: Graph[A, Long]
-  val size: Long
+  val size: Int
 
   def apply: Graph[A, Long]
 
-  def updateComposition(g: Graph[A, Long], a: A, b: A): Graph[A, Long] = {
-    g.mapValues(case a => b)
-  }
+  def updateComposition(a: A, b: A): Graph[A, Long] =
+    composition.mapValues(case a => b)
 
-  def updateComposition(g: Graph[A, Long], a: VertexRDD[A], b: A): Graph[A, Long] = {
-    g.mapValues{ case (vid,attr) if a.contains((vid,attr)) => b }
-  }
+  def updateComposition(a: VertexRDD[A], b: A): Graph[A, Long] =
+    composition.mapValues{ case (vid,attr) if a.contains((vid,attr)) => b }

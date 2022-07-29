@@ -22,21 +22,10 @@ import scala.math.pow
 The ecological landscape class. The landscape is only given by comp, which is
 a Graph of EcoUnits, the rest of parameters are useful to retrieve landscape
 metrics without need of calculation and make them persist over simulation time.
-TODO: I am carrying a bunch of crap on memory just to avoid calculating ncc and the
-rest in the case that it is a high intensity fertility loss transition. This
-might not be worth it, since it complexifies code-wise and probably loads too much
-stuff on memory.
+
 */
 case class EcoLandscape(
   composition: Graph[EcoUnit,Long],
-  naturalcc: VertexRDD[VertexId],
-  ecoservices: VertexRDD[Double],
-  production: Double,
-  recprop: ListMap[VertexId, Map],
-  degprop: ListMap[VertexId, Map],
-  lflprop: ListMap[VertexId, Map],
-  hflprop: ListMap[VertexId, Map],
-  tsp: Double,
   size: Int,
   ecr: Int,
   scalexp: Double,
@@ -47,13 +36,15 @@ case class EcoLandscape(
   sflo: Double)
   extends Landscape with VoronoiTesselation with Agriculture with EcoServices with SpontaneousPropensities:
 
-  def update(vids: VertexRDD[VertexId], transition: TransitionType, cover: EcoUnit): EcoLandscape =
-    EcoLandscape.update(this,vids,transition,cover)
+  def update(vids: VertexRDD[VertexId], cover: EcoUnit): EcoLandscape =
+    val comp = this.updateComposition(vids,cover)
+    this.copy(composition = comp)
 
-  def update(vid: VertexId, transition: TransitionType, cover: EcoUnit): EcoLandscape =
-    EcoLandscape.update(this,vids,transition,cover)
+  def update(vid: VertexId, cover: EcoUnit): EcoLandscape =
+    val comp = this.updateComposition(vid,cover)
+    this.copy(composition = comp)
 
-  def initialize(pln: PlnLandscape, mng: MngLandscape, fagr: Double, deg: Double): EcoLandscape =
+  def initialize(pln: PlnLandscape, mng: MngLandscape, fagr: Double, fdeg: Double): EcoLandscape =
     EcoLandscape.initialize(this,pln,mng,fagr,fdeg)
 
   def countNatural: Int = this.composition.vertices.filter( (_,eu) => eu.isNatural ).count.toInt
@@ -63,43 +54,6 @@ case class EcoLandscape(
 
 object EcoLandscape :
 
-  def update(
-    eco: EcoLandscape,
-    vids: VertexRDD[VertexId],
-    transition: TransitionType,
-    cover: EcoUnit): EcoLandscape =
-      val comp = eco.updateComposition(eco.composition,vids,cover)
-      updateMetrics(comp,eco,transition)
-
-  def update(
-    eco: EcoLandscape,
-    vid: VertexId,
-    transition: TransitionType,
-    cover: EcoUnit): EcoLandscape =
-      val comp = eco.updateComposition(eco.composition,vid,cover)
-      updateMetrics(comp,eco,transition)
-
-  def updateMetrics(
-    comp: Graph[EcoUnit,Long],
-    eco: EcoLandscape,
-    transition: TransitionType): EcoLandscape =
-      transition match {
-        case HighIntensityFertLoss => {
-          val prod = eco.updateProduction(eco.production)
-          val joint = joinCompAndEcoServices(comp,eco.ecoservices)
-          val ((recp, degp, lflp, hflp), upd_tsp) = eco.updatePropensities(0.0,joint,(srec,sdeg,sflo))
-          eco.copy(composition = comp, production = prod, recprop = recp, degprop = degp, lflprop = lflp, hflprop = hflp, tsp = upd_tsp)
-        }
-        case other => {
-          val (ncc,es) = this.updateEcoServices(comp,eco.scalexp,eco.size)
-          val joint = EcoLandscape.joinCompAndEcoServices(comp,es)
-          val prod = this.updateProduction(joint,yes,his)
-          val ((recp, degp, lflp, hflp), upd_tsp) = eco.updatePropensities(0.0,joint,(srec,sdeg,sflo))
-          eco.copy(composition = comp, naturalcc = ncc, ecoservices = es, production = prod, recprop = recp, degprop = degp, lflprop = lflp, hflprop = hflp, tsp = upd_tsp)
-        }
-      }
-
-
   /**
   This method overloads the pre-given apply method and is to be used when initia
   lizing the system. The function build a fully natural EcoLandscape from the
@@ -107,20 +61,16 @@ object EcoLandscape :
   is done in initialize function
   */
   def apply(
-    size: Int,
+    r: Int,
     ecr: Int,
     scalexp: Double,
     yes: Double,
     his: Double,
     srec: Double,
     sdeg: Double,
-    sflo: Double
-  ): EcoLandscape = {
-    val comp = buildComposition(r,ecr)
-    val (ncc,es) = EcoServices.calculateEcoServices(ecocomp,scalexp,size)
-    val prod = Agriculture.calculateProduction(joinCompAndEcoServices(comp,es),yes,his)
-    val ((recp, degp, lflp, hflp), tsp) = SpontaneousPropensities.calculatePropensities(0.0,joint,(srec,sdeg,sflo))
-    EcoLandscape(comp,ncc,es,prod,recp,degp,lflp,hflp,tsp,size,ecr,scalexp,yes,his,srec,sdeg,sflo)
+    sflo: Double): EcoLandscape = {
+      val comp = buildComposition(r,ecr)
+      EcoLandscape(comp,ModCo.area(r),ecr,scalexp,yes,his,srec,sdeg,sflo)
   }
 
   /**
@@ -172,10 +122,10 @@ object EcoLandscape :
       }
 
       def initializeDegradedUnit(eco: EcoLandscape): EcoLandscape = {
-        val propensity = eco.degradationPropensity(0.0, joinCompAndEcoServices(comp,es), 1.0)
+        val propensity = eco.degradationPropensity(0.0, joinCompAndEcoServices(eco.composition,eco.updateEcoServices), 1.0)
         val xrnd = rnd.nextDouble(propensity.last._2)
         val vid = eco.selectVId(xrnd,propensity)
-        eco.update(vid, Degradation, Degraded)
+        eco.update(vid, Degraded)
       }
 
       /**
@@ -186,7 +136,7 @@ object EcoLandscape :
       */
       def updateRemaining(
         n: (Int,Int),
-        transition: String,
+        transition: TransitionType,
         step: Int):
         (Int,Int) = {
           transition match{
@@ -209,7 +159,7 @@ object EcoLandscape :
               pln: PlnLandscape,
               mng: MngLandscape,
               n_agr: Int,
-              n_deg: Int): Graph[EcoUnit,Long] = {
+              n_deg: Int): EcoLandscape = {
 
         val n: Int = n_agr + n_deg
         if (n==0){
@@ -219,7 +169,7 @@ object EcoLandscape :
           rnd.nextInt(n) match {
             case n_rnd if n_rnd<n_agr => { // Conversion transition is chosen
               val old_agr: Int = eco.countAgricultural
-              val upd_eco: Graph[EcoUnit,Long] = initAgriculturalUnit(eco,pln,mng)
+              val upd_eco: Graph[EcoUnit,Long] = initializeAgriculturalUnit(eco,pln,mng)
               val new_agr: Int = upd_eco.countAgricultural
               val step: new_agr - old_agr
               val n_remaining: (Int,Int) = updateRemaining((n_agr,n_deg),Conversion,step)

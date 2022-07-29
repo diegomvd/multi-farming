@@ -17,16 +17,14 @@ trait EcoServices :
   calculation is for the NCC, we also store ES in the hope of optimizing speed.
   This is a compromise between elegance and efficiency.
   */
+  val size: Double
   val scalexp: Double
+  val comp: Graph[EcoUnit, Long]
   val ncc: VertexRDD[VertexId]
   val es: VertexRDD[Double]
 
-  def updateEcoServices(
-    ecocomp: Graph[EcoUnit, Long],
-    scalexp: Double,
-    size: Int
-  ): (VertexRDD[Double], VertexRDD[VertexId]) =
-    EcoServices.calculateEcoServices(ecocomp,scalexp,size)
+  def updateEcoServices: (VertexRDD[Double], VertexRDD[VertexId]) =
+    EcoServices.calculateEcoServices(comp,scalexp,size)
 
 
 object EcoServices :
