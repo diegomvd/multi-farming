@@ -29,7 +29,7 @@ trait Agriculture:
     esgraph: Graph[(EcoUnit,Double) Long],
     yes: Double,
     his: Double): Double = {
-    Agriculture.production(ecocomp,yes,his)
+    Agriculture.calculateProduction(ecocomp,yes,his)
   }
 
 
@@ -68,9 +68,10 @@ object Agriculture:
   /**
   @return the total amount of resources produced in the landscape
   */
-  def production(es_graph: Graph[(EcoUnit,Double),Long],
-                 y1: Double,
-                 y2: Double): Double = {
+  def calculateProduction(
+    es_graph: Graph[(EcoUnit,Double),Long],
+    y1: Double,
+    y2: Double): Double = {
     lowIntResources(es_graph,y1,y2) + highIntResources(es_graph)
   }
 end Agriculture

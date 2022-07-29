@@ -24,11 +24,10 @@ trait EcoServices :
   def updateEcoServices(
     ecocomp: Graph[EcoUnit, Long],
     scalexp: Double,
-    size: Int): (VertexRDD[Double], VertexRDD[VertexId]) = {
+    size: Int
+  ): (VertexRDD[Double], VertexRDD[VertexId]) =
+    EcoServices.calculateEcoServices(ecocomp,scalexp,size)
 
-    val ncc: VertexRDD[VertexId] = EcoServices.naturalConnectedComponents(ecocomp)
-    (ncc, EcoServices.flowDirect(ecocomp,scalexp,size,ncc))
-  }
 
 object EcoServices :
 
@@ -107,4 +106,68 @@ object EcoServices :
     val area_graph: Graph[(EcoUnit,Double),Long] = nccAreaGraph(eco,ncc,ncc_area,size)
     flow(area_graph,scalexp)
   }
+
+  def calculateEcoServices(
+    ecocomp: Graph[EcoUnit, Long],
+    scalexp: Double,
+    size: Int): (VertexRDD[Double], VertexRDD[VertexId]) = {
+
+    val ncc: VertexRDD[VertexId] = naturalConnectedComponents(ecocomp)
+    (ncc, flowDirect(ecocomp,scalexp,size,ncc))
+  }
+
+  def averageESFlow(eco: Graph[EcoUnit,Long],
+                    z: Double,
+                    size: Int): Double = {
+    esGraph(eco,z,size).vertices.reduce{ ((v, a),(_,b)) => (v, a._2 + b._2) }._2 / size.toDouble
+  }
+
+  def averageESFlow(eco: Graph[EcoUnit,Long],
+                    z: Double,
+                    size: Int): Double = {
+    esGraph(eco,z,size).vertices.reduce{ ((v, a),(_,b)) => (v, a._2 + b._2) }._2 / size.toDouble
+  }
+
+  /**
+  Fraction of natural habitat that needs to be removed with uniform probability to
+  halve average ecosystem service provision
+  */
+  def robustnessESFlowOneReplica(average: Double,
+                                 eco: Graph[EcoUnit,Long],
+                                 z: Double,
+                                 size: Int): Double = {
+
+      val thr: Double = average * 0.5
+      val vid: VertexId = rnd.shuffle( eco.subgraph(vpred = (_,eu) => eu.cover == "Natural").vertices.collect() ).take(1)._1
+      val new_eco: Graph[EcoUnit,Long] = eco.mapValues{ case (v,_) if v == vid => (v, "Degraded") }
+      val new_avg: Double = averageESFlow(new_eco,z,size)
+      val n: Int = 1
+
+      @tailrec
+      def rec(thr: Double,
+              current_avg: Double,
+              eco: Graph[EcoUnit,Long],
+              z: Double,
+              size: Int,
+              n: Int): Double = {
+        if(current_avg <= thr) { n }
+        else {
+          val new_n: Int = n + 1
+          val vid: VertexId = rnd.shuffle( eco.subgraph(vpred = (_,eu) => eu.cover == "Natural").vertices.collect() ).take(1)._1
+          val new_eco: Graph[EcoUnit,Long] = eco.mapValues{ case (v,_) if v == vid => (v, "Degraded") }
+          val new_avg: Double = averageESFlow(new_eco,z,size)
+          rec(thr,new_avg,new_eco,z,size,new_n)
+        }
+      }
+      rec(thr,new_avg,new_eco,z,size,n) / eco.subgraph(vpred = (_,eu) => eu.cover == "Natural").vertices.count.toInt
+  }
+
+  def robustnessESFlow(average: Double,
+                       eco: Graph[EcoUnit,Long],
+                       z: Double,
+                       size: Int,
+                       n: Int): Double = {
+    (0 until n).flatMap( case i => robustnessESFlowOneReplica(average,eco,z,size) ).reduce((a,b) => a + b)/n
+  }
+
 end EcoServices

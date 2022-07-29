@@ -12,6 +12,8 @@ object ModCo{
    (0 until area).map( _ ).toList
   }
 
+  def area(r: Int): Int = 3 * r * r + 3 * r + 1 
+
   def toCubic(mod: Int, radius: Int) = (Int,Int) {
     // helper values
     val shift = 3 * radius + 2
