@@ -9,10 +9,17 @@ trait Landscape:
   val composition: Graph[A, Long]
   val size: Int
 
-  def apply: Graph[A, Long]
-
   def updateComposition(a: A, b: A): Graph[A, Long] =
     composition.mapValues(case a => b)
 
   def updateComposition(a: VertexRDD[A], b: A): Graph[A, Long] =
     composition.mapValues{ case (vid,attr) if a.contains((vid,attr)) => b }
+
+trait BaseLandscape extends Landscape with VoronoiTesselation
+
+trait TopLandscape extends Landscape :
+  val scale: Double
+
+object TopLandscape :
+  def numberOfUnits(scale: Double, basesize: Int):Int = (basesize * scale).toInt
+end TopLandscape

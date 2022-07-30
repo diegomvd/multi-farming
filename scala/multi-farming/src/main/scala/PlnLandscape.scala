@@ -14,66 +14,71 @@ import org.apache.spark.graphx.Graph
 import scala.math.pow
 import scala.math.max
 
-object PlnLandscape{
+case class PlnLandscape(
+  composition: Graph[PlnUnit,Long]
+  scale: Double,
+  size: Int)
+  extends TopLandscape with BaseLandscape :
+
+    def availableNeighbors(eco: Graph[EcoUnit,Long]): VertexRDD[VertexId] =
+      PlnLandscape.neighborAvailability(this.composition,eco,True)
+
+    def unavailableNeighbors(eco: Graph[EcoUnit,Long]): VertexRDD[VertexId] =
+      PlnLandscape.neighborAvailability(this.composition,eco,False)
+
+    /**
+    @return a sub graph of the planning landscape composition consisting on a
+    given management unit
+    */
+    def subLandscape(mngunit: ParVector[VertexId]): Graph[PlnUnit,Long] =
+      this.composition.subgraph( vpred = (vid,attr) => mngunit.contains(vid) )
+
+object PlnLandscape :
 
   /**
   @param nu is the number of planning units to create
   @param eco is the biophysical landscape
   @return the composition graph of the planning landscape
-  TODO: the tesselation returns a Graph of iterables of vertex instead of vertexRDD, must check if this is a problem or if PLUnits could be VertexRDDs
   */
-  def build(nu: Int,
-            eco: Graph[EcoUnit,Long]): Graph[PlnUnit,Long] = {
-    VoronoiUtils.tesselation(nu,eco).mapValues(PlnUnit(_))
-  }
+  def buildComposition(
+    nu: Int,
+    eco: EcoLandscape):
+    Graph[PlnUnit,Long] =
+      eco.tesselate(nu).mapValues(PlnUnit(_))
+
+  def apply(
+    plnscale: Double,
+    eco: EcoLandscape):
+    PlnLandscape =
+      val nu = TopLandscape.numberOfUnits(plnscale,eco.size)
+      val comp = buildComposition(nu,eco)
+      PlnLandscape(comp,plnscale,nu)
 
   /**
   @param comp is the composition graph of the selected management unit
   @param eco is the composition of the biophysical landscape
-  @return the number of available neighbors for each available unit
+  @param bool determines if we are looking or available or unavailable ones
+  @return the number of available/unavailable neighbors for each available unit
+  TODO: must check if there is need to send 0 when dstAttr is not available
   */
-  def availableNeighbors(comp: Graph[PlnUnit,Long],
-                         eco: Graph[EcoUnit,Long]): VertexRDD[Int] = {
-    comp.aggregateMessages[Int](
-      triplet => {
-        if (triplet.dstAttr.isAvailable(eco)){
-          if (triplet.srcAttr.isAvailable(eco)) {
-            triplet.sendToDst(1)
+  def neighborAvailability(
+    comp: Graph[PlnUnit,Long],
+    eco: Graph[EcoUnit,Long],
+    available: Bool):
+    VertexRDD[Int] =
+      available match {
+        case True => val v = (1, 0)
+        case False => val v = (0, 1)
+      }
+      comp.aggregateMessages[Int](
+        triplet => {
+          if (triplet.dstAttr.isAvailable(eco)){
+            if (triplet.srcAttr.isAvailable(eco)) {
+              triplet.sendToDst(v._1)
+            }
+            else triplet.sendToDst(v._2)
           }
-          else triplet.sendToDst(0)
-        }
-      },
-      (a,b) => a + b
-    )
-  }
-
-  /**
-  @param comp is the composition graph of the selected management unit
-  @param eco is the composition of the biophysical landscape
-  @return the number of unavailable neighbors for each available unit
-  */
-  def unavailableNeighbors(comp: Graph[PlnUnit,Long],
-                           eco: Graph[EcoUnit,Long]): VertexRDD[Int] = {
-    comp.aggregateMessages[Int](
-      triplet => {
-        if (triplet.dstAttr.isAvailable(eco)) {
-          if (triplet.srcAttr.isAvailable(eco)) {
-            triplet.sendToDst(0)
-          }
-          else triplet.sendToDst(1)
-        }
-      },
-      (a,b) => a + b
-    )
-  }
-
-  /**
-  * returns the subgraph of the planning landscape belonging to a management unit
-  * with the adjacent pus, at the moment is not extended
-  */
-  def extendedSubGraph(comp: Graph[PlnUnit,Long],
-                       sub: ParVector[VertexId]): Graph[PlnUnit,Long] = {
-    comp.subgraph( vpred = (vid,attr) => sub.contains(vid) )
-  }
-
-}
+        },
+        (a,b) => a + b
+      )
+end PlnLandscape

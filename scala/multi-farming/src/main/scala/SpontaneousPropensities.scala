@@ -3,7 +3,6 @@ trait SpontaneousPropensities :
   val srec: Double
   val sdeg: Double
   val sflo: Double
-  val propensities : ( (ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]), Double )
 
   /**
   @param ival is the initial value for the cummulative sum

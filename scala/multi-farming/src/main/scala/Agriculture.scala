@@ -17,15 +17,9 @@ trait Agriculture:
   */
   val yes: Double
   val his: Double
-  val production: Double
-
-  // function for HI fertility loss
-  def updateProduction(production: Double): Double = {
-    production - 1.0
-  }
 
   // function for every other landscape transforming transition
-  def updateProduction(
+  def resourceProduction(
     esgraph: Graph[(EcoUnit,Double) Long],
     yes: Double,
     his: Double): Double = {

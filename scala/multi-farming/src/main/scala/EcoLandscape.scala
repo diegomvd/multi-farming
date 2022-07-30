@@ -34,23 +34,24 @@ case class EcoLandscape(
   srec: Double,
   sdeg: Double,
   sflo: Double)
-  extends Landscape with VoronoiTesselation with Agriculture with EcoServices with SpontaneousPropensities:
+  extends BaseLandscape with Agriculture with EcoServices with SpontaneousPropensities :
 
-  def update(vids: VertexRDD[VertexId], cover: EcoUnit): EcoLandscape =
-    val comp = this.updateComposition(vids,cover)
-    this.copy(composition = comp)
+    def update(vids: VertexRDD[VertexId], cover: EcoUnit): EcoLandscape =
+      val comp = this.updateComposition(vids,cover)
+      this.copy(composition = comp)
 
-  def update(vid: VertexId, cover: EcoUnit): EcoLandscape =
-    val comp = this.updateComposition(vid,cover)
-    this.copy(composition = comp)
+    def update(vid: VertexId, cover: EcoUnit): EcoLandscape =
+      val comp = this.updateComposition(vid,cover)
+      this.copy(composition = comp)
 
-  def initialize(pln: PlnLandscape, mng: MngLandscape, fagr: Double, fdeg: Double): EcoLandscape =
-    EcoLandscape.initialize(this,pln,mng,fagr,fdeg)
+    def initialize(pln: PlnLandscape, mng: MngLandscape, fagr: Double, fdeg: Double): EcoLandscape =
+      EcoLandscape.initialize(this,pln,mng,fagr,fdeg)
 
-  def countNatural: Int = this.composition.vertices.filter( (_,eu) => eu.isNatural ).count.toInt
-  def countDegraded: Int = this.composition.vertices.filter( (_,eu) => eu.isDegraded ).count.toInt
-  def countAgricultural: Int = this.composition.vertices.filter( (_,eu) => eu.isDegraded ).count.toInt
-
+    def countNatural: Int = this.composition.vertices.filter( (_,eu) => eu.matchCover(Natural) ).count.toInt
+    def countDegraded: Int = this.composition.vertices.filter( (_,eu) => eu.matchCover(Degraded) ).count.toInt
+    def countAgriculturalLI: Int = this.composition.vertices.filter( (_,eu) => eu.matchCover(LowIntensity) ).count.toInt
+    def countAgriculturalHI: Int = this.composition.vertices.filter( (_,eu) => eu.matchCover(HighIntensity) ).count.toInt
+    def countAgricultural: Int = this.countAgriculturalLI + this.countAgriculturalHI
 
 object EcoLandscape :
 
@@ -122,7 +123,7 @@ object EcoLandscape :
       }
 
       def initializeDegradedUnit(eco: EcoLandscape): EcoLandscape = {
-        val propensity = eco.degradationPropensity(0.0, joinCompAndEcoServices(eco.composition,eco.updateEcoServices), 1.0)
+        val propensity = eco.degradationPropensity(0.0, joinCompAndEcoServices(eco.composition,eco.ecosystemServicesFlow), 1.0)
         val xrnd = rnd.nextDouble(propensity.last._2)
         val vid = eco.selectVId(xrnd,propensity)
         eco.update(vid, Degraded)

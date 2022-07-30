@@ -20,10 +20,8 @@ trait EcoServices :
   val size: Double
   val scalexp: Double
   val comp: Graph[EcoUnit, Long]
-  val ncc: VertexRDD[VertexId]
-  val es: VertexRDD[Double]
 
-  def updateEcoServices: (VertexRDD[Double], VertexRDD[VertexId]) =
+  def ecosystemServiceFlow: (VertexRDD[Double], VertexRDD[VertexId]) =
     EcoServices.calculateEcoServices(comp,scalexp,size)
 
 

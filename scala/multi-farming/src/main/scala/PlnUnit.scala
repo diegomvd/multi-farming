@@ -15,49 +15,51 @@ import org.apache.spark.graphx.Graph
 import scala.math.pow
 import scala.math.max
 
-case class PlnUnit(comp: ParVector[VertexId]){
-
+case class PlnUnit(composition: ParVector[VertexId]):
   /**
   I don't know if adjacent makes sense anymore
   */
-  def adjacent(r: Int): VertexRDD[VertexId] = {
-    PlnUnit.adjacent(r,this.comp)
-  }
+  def adjacent(r: Int): VertexRDD[VertexId] =
+    PlnUnit.adjacent(r,this.composition)
 
-  def isAvailable(eco: Graph[EcoUnit,Long]): Bool = {
-    PlnUnit.isAvailable(this.comp,eco)
-  }
-}
+  def isAvailable(eco: Graph[EcoUnit,Long]): Bool =
+    PlnUnit.isAvailable(this.composition,eco)
 
-object PlnUnit {
+object PlnUnit :
 
   /**
   @param r is the radius of the biophysical landscape
   @param comp the composition of the planning unit
   @return an RDD with the IDs of each ecological unit adjacent to the planning unit
   */
-  def adjacent(r: Int,
-               comp: ParVector[VertexId]): VertexRDD[VertexId] = {
-    comp.mapValues( ModCo.neighbors(_.toInt,r,1) ).filterNot(comp.exists(_))
-  }
+  def adjacent(
+    r: Int,
+    comp: ParVector[VertexId]):
+    VertexRDD[VertexId] =
+      comp.mapValues( ModCo.neighbors(_.toInt,r,1) ).filterNot(comp.exists(_))
 
   /**
   @param comp is the composition of the planning unit
   @param eco is the composition of the biophysical landscape
   @return true if the planning unit can be cultivated, false if not
   */
-  def isAvailable(comp: ParVector[VertexId],
-                  eco: Graph[EcoUnit,Long]): Bool = {
-    comp.exists( eco.vertices.lookup(_).cover == "Natural") && comp.forall{ (eco.vertices.lookup(_).cover == "Natural" || eco.vertices.lookup(_).cover == "Degraded") }
-  }
+  def isAvailable(
+    comp: ParVector[VertexId],
+    eco: Graph[EcoUnit,Long]):
+    Bool =
+      val predicate1 = comp.exists( eco.vertices.lookup(_).matchCover(Natural))
+      val predicate2 = comp.forall{ (eco.vertices.lookup(_).matchCover(Natural) || eco.vertices.lookup(_).matchCover(Degraded)) }
+      predicate1 && predicate2
 
   /**
   @param nn is the number of neighbors that give weight to the clustering
   @param clst is the clustering coefficient
   @return the clustering weight
   */
-  def weightExpression(nn: Int, clst: Double): Double = {
-    pow( max(0.1,nn), clst)
-  }
+  def weightExpression(
+    nn: Int,
+    clst: Double):
+    Double =
+      pow( max(0.1,nn), clst)
 
-}
+end PlnUnit

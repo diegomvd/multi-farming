@@ -13,11 +13,11 @@ import org.apache.spark.graphx.Graph
 
 trait VoronoiTesselation :
 
-  def tesselate(
-    n_seeds: Int,
-    base: Graph[A,Long]): Graph[ParVector[A], Long] = {
+  val composition: Graph[A,Long]
 
-    val assigned = VoronoiTesselation.seeded(n_seeds,base)
+  def tesselate(n_seeds: Int): Graph[ParVector[A], Long] = {
+
+    val assigned = VoronoiTesselation.seeded(n_seeds,composition)
 
     @annotation.tailrec
     def rec(assigned: Graph[VertexId, Long]): Graph[VertexId, Long]{

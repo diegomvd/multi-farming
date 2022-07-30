@@ -10,6 +10,13 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
+case class MngLandscape(
+  composition: Graph[MngUnits,Long],
+  scale: Double,
+  fsparing: Double,
+  size: Int)
+  extends TopLandscape
+
 object MngLandscape{
 
   /**
