@@ -38,6 +38,8 @@ case class TheMatrix(
     (TheMatrix,EventType) =
       TheMatrix.updated(pop,spont,tcp,this)
 
+  def initialize()
+
   /**
   This function runs the world's dynamics:
   1- Get the natural connected components
@@ -101,9 +103,13 @@ case class TheMatrix(
 
 }
 
-object World{
+object TheMatrix :
 
-  def apply(args: Parameters): World = {
+  /**
+  TODO: this function requires changes, specially to determine the way into which
+  the simulation should be initialized.
+  */
+  def apply(args: Parameters): TheMatrix = {
 
     val eco_pristine: Graph[EcoUnit,Long] = EcoLandscape.natural(args.r,args.ecr)
     val npu: Int = args.pscale/args.size
@@ -118,7 +124,7 @@ object World{
       EcoLandscape.resources(eco,args.z,args.size,args.y_es,args.his)
     val pop: Int = HumanPop.build(res)
 
-    World(0.0,eco,pln,mng,pop,args)
+    TheMatrix(0.0,eco,pln,mng,pop,args)
   }
 
   /**
@@ -126,73 +132,79 @@ object World{
   @param eco is the ecological landscape
   @return a world with an updated biophyscal landscape
   */
-  def updatedEco(world: World,
-                 new_t: Double,
-                 new_eco: Graph[EcoUnit,Long]): World = {
-    world.copy(t = new_t, eco = new_eco)
-  }
+  def updateEco(
+    world: TheMatrix,
+    new_t: Double,
+    new_eco: EcoLandscape):
+    TheMatrix =
+      world.copy(t = new_t, eco = new_eco)
 
   /**
   @param world is this world
   @param eco is the ecological landscape
   @return a world with an updated population
   */
-  def updatedPop(world: World,
-                 new_t: Double,
-                 new_pop: Double): World = {
-    world.copy(t = new_t, pop = new_pop)
-  }
+  def updatePop(
+    world: TheMatrix,
+    new_t: Double,
+    new_pop: Double):
+    TheMatrix =
+      world.copy(t = new_t, pop = new_pop)
+
 
   /**
   @param pop is the human population propensity
-  @param rec is the recovery propensity
-  @param deg is the degradation propensity
-  @param flo is the fertility loss propensity
+  @param spont are the spontaneous propensities
   @param tcp is the total conversion propensity
   @return the updated world given the propensities
   */
-  def updated(pop: (Double,Double),
-              spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
-              tcp: Double,
-              world: World): (World, String) = {
+  def update(
+    pop: (Double,Double),
+    spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
+    tcp: Double,
+    world: TheMatrix):
+    (TheMatrix, EventType) = {
 
-    val new_t: Double = world.t - 1/log(rnd.nextDouble(pop._2 + spont._5 + tcp))
+    val new_t: Double = world.t - 1/log(rnd.nextDouble(pop._2 + spont._2 + tcp))
     // random number to select an event, maximum is the sum of the cumulative propensities
-    val x_rnd: Double = rnd.nextDouble(pop._2 + spont._5 + tcp)
+    val x_rnd: Double = rnd.nextDouble(pop._2 + spont._2 + tcp)
 
-    selectEventGeneralType(x_rnd,pop._2,spont._2,tcp) match {
-      case "Population" => {
-        val upd_pop: Int = applyPopulationEvent(x_rnd,pop,world.pop)
-        (updatedPop(world,new_t,upd_pop),"Population")
+    selectEventType(x_rnd,pop._2,spont._2,tcp) match {
+      case Demographic => {
+        val upd_pop: Int = world.pop.update(applyPopulationEvent(x_rnd,pop,world.pop)
+        (updatePop(world,new_t,upd_pop),Population)
       }
-      case "Spontaneous" => {
+      case Spontaneous => {
         selectSpontaneous(x_rnd,spont._1) match {
-          case "Recovery" => {
-            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._1,eco,"Natural")
-            val event = "Landscape-ESmod"
+          case Recovery => {
+            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._1,eco,Natural)
+            val event = Recovery
           }
-          case "Degradation" => {
-            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._2,eco,"Degraded")
-            val event = "Landscape-ESmod"
+          case Degradation => {
+            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._2,eco,Degraded)
+            val event = Degraded
           }
-          case "FertilityLossLow" => {
-            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._3,eco,"Natural")
-            val event = "Landscape-ESmod"
+          case LowIntensityFertilityLoss => {
+            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._3,eco,Natural)
+            val event = LowIntensityFertilityLoss
           }
-          case "FertilityLossHigh" => {
-            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._4,eco,"Degraded")
-            val event = "Landscape-ESnomod"
+          case HighIntensityFertilityLoss => {
+            val upd_eco: Graph[EcoUnit,Long] = applySpontaneousEvent(x_rnd,spont._1._4,eco,Degraded)
+            val event = HighIntensityFertilityLoss
           }
         }
-        (updatedEco(world,new_t,upd_eco),event)
+        (updateEco(world,new_t,upd_eco),event)
       }
-      case "Conversion" => {
+      case Conversion => {
         val upd_eco: Graph[EcoUnit,Long] = applyConversionEvent(x_rnd,spont._2,world.eco,world.pln,world.mng,tcp)
-        (updatedEco(world,new_t,upd_eco),"Landscape-ESmod")
+        (updateEco(world,new_t,upd_eco),Conversion)
       }
     }
   }
 
+  /**
+  TODO: all the functions below require examination to correct and determine where they belong
+  */
   def applyPopulationEvent(x_rnd: Double,
                            prop: (Double,Double),
                            pop: Double): Double {
@@ -210,32 +222,34 @@ object World{
     EcoLandscape.updated(vid,cover,eco)
   }
 
-  def applyConversionEvent(x_rnd: Double,
-                           ival: Double,
-                           eco: Graph[EcoUnit,Long],
-                           pln: Graph[PlnUnit,Long],
-                           mng: Graph[MngUnit,Long],
-                           tcp: Double): Graph[EcoUnit,Long] = {
-    val mngp: ListMap[VertexId,Double] =
-     MngLandscape.propensities(ival,tcp,mng,pln,eco)
-    val vid: VertexId =
-     StochSimUtils.selectVId(x_rnd,mngp)
+  def applyConversionEvent(
+    x_rnd: Double,
+    ival: Double,
+    eco: Graph[EcoUnit,Long],
+    pln: Graph[PlnUnit,Long],
+    mng: Graph[MngUnit,Long],
+    tcp: Double):
+    Graph[EcoUnit,Long] = {
+      val mngp: ListMap[VertexId,Double] =
+       MngLandscape.propensities(ival,tcp,mng,pln,eco)
+      val vid: VertexId =
+       StochSimUtils.selectVId(x_rnd,mngp)
 
-    val max: Double = mngp.get(vid)
-    // this approach works because every management unit can be selected with
-    // unifrom probability. Else it is needed to access the previous element
-    val utcp: Double = mngp.head._2
-    val ival2: Double = max-step
-    val plnp: VertexRDD[Double] =
-     mng.lookup(mid).propensities(ival2,step,pln,eco)
-    val pid: VertexId =
-     StochSimUtils.selectVId(x_rnd,plnp)
+      val max: Double = mngp.get(vid)
+      // this approach works because every management unit can be selected with
+      // unifrom probability. Else it is needed to access the previous element
+      val utcp: Double = mngp.head._2
+      val ival2: Double = max-step
+      val plnp: VertexRDD[Double] =
+       mng.lookup(mid).propensities(ival2,step,pln,eco)
+      val pid: VertexId =
+       StochSimUtils.selectVId(x_rnd,plnp)
 
-    val vids: VertexRDD[VertexId] = pln.lookup(pid)
-    mng.lookup(mid).stg match{
-     case "Sharing" => EcoLandscape.updated(vids, "Low-intensity", eco)
-     case "Sparing" => EcoLandscape.updated(vids, "High-intensity", eco)
-    }
+      val vids: VertexRDD[VertexId] = pln.lookup(pid)
+      mng.lookup(mid).stg match{
+       case LandSharing => EcoLandscape.updated(vids, LowIntensity, eco)
+       case LandSparing => EcoLandscape.updated(vids, HighIntensity, eco)
+      }
   }
 
   /**
@@ -245,44 +259,46 @@ object World{
   @param pop is the total population propensity
   @return a string identifying the general type of event
   */
-  def selectEventGeneralType(x_rnd: Double,
-                             pop: Double,
-                             spont: Double,
-                             tcp: Double): String = {
-    x_rnd match {
-      case x if x < pop => "Population"
-      case x if x < spont => "Spontaneous"
-      case x if x < tcp => "Conversion"
-      case other => println(s"Cannot select a transition, propensity upper bound in the selector is larger than expected.")
+  def selectEventType(
+    x_rnd: Double,
+    pop: Double,
+    spont: Double,
+    tcp: Double):
+    EventType =
+      x_rnd match {
+        case x if x < pop => Demographic
+        case x if x < spont => Spontaneous
+        case x if x < tcp => Conversion
     }
-  }
 
   /**
   @param x_rnd is the random number thrown to sample the distributions
   @param prop contains the birth and death propensities in field 1 and 2 respectively
   @return a string with the type of human population event
+  TODO: this should be inside the human population class
   */
-  def selectBirthOrDeath(x_rnd: Double,
-                         prop: (Double, Double)): String = {
-    x_rnd match {
-      case x if x < prop._1 => "Birth"
-      case x if x < prop._2 => "Death"
-      case other => println(s"selectBirthOrDeath: Cannot select a transition, propensity upper bound in the selector is larger than expected.")
-    }
-  }
+  def selectBirthOrDeath(
+    x_rnd: Double,
+    prop: (Double, Double)):
+    EventType =
+      x_rnd match {
+        case x if x < prop._1 => Birth
+        case x if x < prop._2 => Death
+      }
 
   /**
   @paramx_rnd is the random number thrown to sample the distributions
   @paramprop contains the recovery, degradation and fertility loss propensities in field 1,2 and 3 respectively
   @return a string with the type of spontaneous land cover transition
+  TODO: this should be inside EcoLandscape
   */
-  def selectSpontaneous(x_rnd: Double,
-                        prop: (Double,Double,Double,Double)): String = {
-    x_rnd match {
-      case x if x < prop._1 => "Recovery"
-      case x if x < prop._2 => "Degradation"
-      case x if x < prop._3 => "FertilityLoss"
-      case other => println(s"selectSpontaneous: Cannot select a transition, propensity upper bound in the selector is larger than expected.")
-    }
-  }
-}
+  def selectSpontaneous(
+    x_rnd: Double,
+    prop: (Double,Double,Double,Double)):
+    EventType =
+      x_rnd match {
+        case x if x < prop._1 => Recovery
+        case x if x < prop._2 => Degradation
+        case x if x < prop._3 => FertilityLoss
+      }
+end TheMatrix

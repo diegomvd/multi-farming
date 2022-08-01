@@ -10,10 +10,7 @@ case class HumanPop(
   size: Int
   sres: Double):
 
-  def update(
-    size: Int,
-    demo: EventType):
-    Int =
+  def update(demo: EventType): Int =
       demo match {
         case Birth => HumanPop.birth(size)
         case Death => HumanPop.death(size)
@@ -23,7 +20,7 @@ case class HumanPop(
     this.size.toDouble - resources
 
   def totalConversionPropensity(resources: Double) =
-    this.sres * this.resourceDemand(resources)  
+    this.sres * this.resourceDemand(resources)
 
   /**
   @return a tuple with birth and death propensities in first and second positions respectively
