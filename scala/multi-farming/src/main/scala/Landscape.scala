@@ -42,6 +42,9 @@ enum MngStrategy(clustering: Double)
   case LandSharing(clustering = 3.0)
   case LandSparing(clustering = 3.0)
 
+/**
+TODO: check if these hierarchically nested enums are actually correct, if not how to do it??
+*/
 enum EventType:
   case Spontaneous:
     case Recovery

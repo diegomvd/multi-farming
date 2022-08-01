@@ -31,12 +31,12 @@ case class TheMatrix(
   This function updates the world given the events' propensities
   @return an updated world
   */
-  def updated(
+  def update(
     pop: (Double,Double),
     spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
     tcp: Double):
     (TheMatrix,EventType) =
-      TheMatrix.updated(pop,spont,tcp,this)
+      TheMatrix.update(pop,spont,tcp,this)
 
   def initialize()
 
@@ -171,7 +171,7 @@ object TheMatrix :
 
     selectEventType(x_rnd,pop._2,spont._2,tcp) match {
       case Demographic => {
-        val upd_pop: Int = world.pop.update(applyPopulationEvent(x_rnd,pop,world.pop)
+        val upd_pop: Int = applyPopulationEvent(x_rnd,pop,world.pop)
         (updatePop(world,new_t,upd_pop),Population)
       }
       case Spontaneous => {
@@ -205,22 +205,19 @@ object TheMatrix :
   /**
   TODO: all the functions below require examination to correct and determine where they belong
   */
-  def applyPopulationEvent(x_rnd: Double,
-                           prop: (Double,Double),
-                           pop: Double): Double {
-    selectBirthOrDeath(x_rnd,prop) match {
-      case "Birth" => pop + 1.0
-      case "Death" => pop - 1.0
-    }
-  }
+  def applyPopulationEvent(
+    x_rnd: Double,
+    prop: (Double,Double),
+    pop: HumanPop): HumanPop =
+      pop.update(selectBirthOrDeath(x_rnd,prop))
 
-  def applySpontaneousEvent(x_rnd: Double,
-                            prop: ListMap[VertexId,Double],
-                            eco: Graph[EcoUnit,Long],
-                            cover: String): Graph[EcoUnit,Long] = {
-    val vid: VertexId = StochSimUtils.selectVId(x_rnd,prop)
-    EcoLandscape.updated(vid,cover,eco)
-  }
+  def applySpontaneousEvent(
+    x_rnd: Double,
+    prop: ListMap[VertexId,Double],
+    eco: EcoLandscape,
+    cover: LandCover): EcoLandscape =
+      val vid: VertexId = eco.selectVId(x_rnd,prop)
+      eco.update(vid,cover)
 
   def applyConversionEvent(
     x_rnd: Double,
