@@ -19,12 +19,9 @@ trait Agriculture:
   val his: Double
 
   // function for every other landscape transforming transition
-  def resourceProduction(
-    esgraph: Graph[(EcoUnit,Double) Long],
-    yes: Double,
-    his: Double): Double = {
+  def resourceProduction(esgraph: Graph[(EcoUnit,Double) Long]): Double =
     Agriculture.calculateProduction(ecocomp,yes,his)
-  }
+  
 
 
 object Agriculture:

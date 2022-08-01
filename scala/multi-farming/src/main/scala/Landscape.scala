@@ -23,3 +23,35 @@ trait TopLandscape extends Landscape :
 object TopLandscape :
   def numberOfUnits(scale: Double, basesize: Int):Int = (basesize * scale).toInt
 end TopLandscape
+
+trait SpatialStochasticEvents:
+
+  def selectVId(
+    x_rnd: Double,
+    prob: ListMap[VertexId,Double]):
+    VertexId =
+      prob.find(x_rnd <= _._2)._1
+
+enum LandCover:
+  case Natural
+  case Degraded
+  case LowIntAgriculture
+  case HighIntAgriculture
+
+enum MngStrategy(clustering: Double)
+  case LandSharing(clustering = 3.0)
+  case LandSparing(clustering = 3.0)
+
+enum EventType:
+  case Spontaneous:
+    case Recovery
+    case Degradation
+    case FertilityLoss:
+      case LowIntensityFertilityLoss
+      case HighIntensityFertilityLoss
+  case Conversion:
+    case LowIntensityConversion
+    case HighIntensityConversion
+  case Demographic:
+    case Birth
+    case Death

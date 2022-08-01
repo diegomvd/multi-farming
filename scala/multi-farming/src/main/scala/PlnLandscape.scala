@@ -18,7 +18,7 @@ case class PlnLandscape(
   composition: Graph[PlnUnit,Long]
   scale: Double,
   size: Int)
-  extends TopLandscape with BaseLandscape :
+  extends TopLandscape with BaseLandscape with SpatialStochasticEvents:
 
     def availableNeighbors(eco: Graph[EcoUnit,Long]): VertexRDD[VertexId] =
       PlnLandscape.neighborAvailability(this.composition,eco,True)
@@ -39,6 +39,7 @@ object PlnLandscape :
   @param nu is the number of planning units to create
   @param eco is the biophysical landscape
   @return the composition graph of the planning landscape
+  TODO: need to check these functions depending on tesselations
   */
   def buildComposition(
     nu: Int,

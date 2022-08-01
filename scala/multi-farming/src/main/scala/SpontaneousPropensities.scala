@@ -61,17 +61,11 @@ trait SpontaneousPropensities :
   */
   def updatePropensities(
     ival: Double,
-    es_graph: Graph[(EcoUnit,Double),Long],
-    s: (Double,Double,Double) ):
+    es_graph: Graph[(EcoUnit,Double),Long]):
     ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]), Double) = {
-    val recovery: ListMap[VertexId,Double] = recoveryPropensity(ival,es_graph,s._1)
-    val degradation: ListMap[VertexId,Double] = degradationPropensity(recovery.last._2,es_graph,s._2)
-    val li_floss: ListMap[VertexId,Double] = fertilityLossLIPropensity(degradation.last._2,es_graph,s._3)
-    val hi_floss: ListMap[VertexId,Double] = fertilityLossHIPropensity(li_floss.last._2,es_graph,s._3)
+    val recovery: ListMap[VertexId,Double] = recoveryPropensity(ival,es_graph,srec)
+    val degradation: ListMap[VertexId,Double] = degradationPropensity(recovery.last._2,es_graph,sdeg)
+    val li_floss: ListMap[VertexId,Double] = fertilityLossLIPropensity(degradation.last._2,es_graph,sflo)
+    val hi_floss: ListMap[VertexId,Double] = fertilityLossHIPropensity(li_floss.last._2,es_graph,sflo)
     ((recovery._1,degradation._1,li_floss._1,hi_floss._1),hi_floss.last._2)
-  }
-
-  def selectVId(x_rnd: Double,
-                prob: ListMap[VertexId,Double]) = VertexId {
-    prob.find(x_rnd <= _._2)._1
   }

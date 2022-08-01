@@ -34,7 +34,7 @@ case class EcoLandscape(
   srec: Double,
   sdeg: Double,
   sflo: Double)
-  extends BaseLandscape with Agriculture with EcoServices with SpontaneousPropensities :
+  extends BaseLandscape with Agriculture with EcoServices with SpontaneousPropensities with SpatialStochasticEvents :
 
     def update(vids: VertexRDD[VertexId], cover: EcoUnit): EcoLandscape =
       val comp = this.updateComposition(vids,cover)
@@ -137,7 +137,7 @@ object EcoLandscape :
       */
       def updateRemaining(
         n: (Int,Int),
-        transition: TransitionType,
+        transition: EventType,
         step: Int):
         (Int,Int) = {
           transition match{

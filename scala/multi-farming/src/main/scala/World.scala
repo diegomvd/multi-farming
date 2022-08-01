@@ -4,12 +4,14 @@
 * landscapes, its populations and its parameters, which are the world's universal
 * constants.
 */
-case class World(t: Double,
-                 eco: Graph[EcoUnit,Long],
-                 pln: Graph[PlanningUnit,Long],
-                 mng: Graph[ManagementUnit,Long],
-                 pop: Int,
-                 args: Parameters){
+case class TheMatrix(
+  t: Double,
+  maxTime: Double,
+  eco: EcoLandscape,
+  pln: PlnLandscape,
+  mng: MngLandscape,
+  pop: HumanPop):
+
   /**
   This functions terminates execution of the simulation if:
    -time exceeds maximum
@@ -18,23 +20,23 @@ case class World(t: Double,
    -landscape is pristine and population size 0
   @return a boolean determining whether the simulation should stop or not
   */
-  def doesNotHaveNext(): Boolean = {
+  def doesNotHaveNext: Boolean =
     val pred_time: Bool = this.t > this.args.maxT
     val pred_pop: Bool = this.pop == 0
     val pred_deg: Bool = this.eco.countNatural() == 0
     val pred_nat: Bool = this.eco.countNatural() == this.args.size
     (pred_time || pred_pop || pred_deg || (pred_nat && pred_pop))
-  }
 
   /**
   This function updates the world given the events' propensities
   @return an updated world
   */
-  def updated(pop: (Double,Double),
-              spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
-              tcp: Double): (World,String) = {
-    World.updated(pop,spont,tcp,this)
-  }
+  def updated(
+    pop: (Double,Double),
+    spont: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
+    tcp: Double):
+    (TheMatrix,EventType) =
+      TheMatrix.updated(pop,spont,tcp,this)
 
   /**
   This function runs the world's dynamics:
@@ -44,83 +46,57 @@ case class World(t: Double,
   4- Calculate propensities
   5- Update the world
   @return the state of the world
+  TODO: ecosystemServiceFlow does not return a joined graph and that's needed,
+  some adjustements to be done
   */
-  def run(): World = {
+  def run: TheMatrix = {
 
-    // Get the natural connected components
-    val ncc = EcoLandscape.naturalConnectedComponents(this.eco)
-    val ncc_area = EcoLandscape.nccAreaDistribution(ncc)
-    val area_graph = Ecolandscape.nccAreaGraph(this.eco,ncc,ncc_area,this.args.size)
+    val (ncc, es) = this.eco.ecosystemServiceFlow
+    val res = this.eco.resourceProduction(es)
+    val popp = this.pop.propensities(0.0,res)
+    val spontp = this.eco.updatePropensities(popp._2,es)
+    val tcp = this.pop.totalConversionPropensity(res)
 
-    // Get the ecosystem services flow
-    val es_flow = EcoLandscape.esFlow(area_graph,this.args.z)
-    val es_graph = EcoLandscape.esGraph(this.eco,es_flow)
-
-    // Get resource production
-    val res = EcoLandscape.resources(es_graph,this.args.y_es,this.args.his)
-
-    // Get population propensities
-    val popp = HumanPop.propensities(0.0,this.pop,res)
-
-    // Get spontaneous propensities
-    val spontp= EcoLandscape.allSpontaneous(popp._2,es_graph,(this.args.s1,this.args.s2,this.args.s3))
-
-    // Get total conversion propensity: check if ival should be here or it is in the function
-    val tcp = this.args.s4 * HumanPop.resourceDemand(this.pop,res)
-
-    @tailrec
-    def rec(world: World,
+    @annotation.tailrec
+    def rec(world: TheMatrix,
             ncc: VertexRDD[VertexId],
-            ncc_area: Map[(VertexId,VertexId), Long],
-            area_graph: Graph[(EcoUnit,Double), Long],
-            es_flow:  VertexRDD[Double],
-            es_graph: Graph[(EcoUnit,Double),Long],
+            es: Graph[(EcoUnit,Double),Long],
             res: Double,
             popp: (Double,Double),
             spontp: ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]),Double),
-            tcp: Double): World = {
-      if world.doesNotHaveNext() { world }
+            tcp: Double): TheMatrix = {
+      if world.doesNotHaveNext { world }
       else {
-        val new_world: (World, String) = world.updated(popp,spontp,tcp)
+        val new_world: (TheMatrix, EventType) = world.updated(popp,spontp,tcp)
         new_world._2 match {
-          case "Population" => {
+          case Demographic => {
             val new_ncc = ncc
-            val new_ncc_area = ncc_area
-            val new_area_graph = area_graph
-            val new_es_flow = es_flow
-            val new_es_graph = es_graph
+            val new_es = es
             val new_res = res
-            val new_popp = HumanPop.propensities(0.0,new_world._1.pop,res)
+            val new_popp = new_world._1.pop.propensities(0.0,new_res)
             val new_spontp = spontp
-            val new_tcp = world.args.s4 * HumanPop.resourceDemand(new_pop,res)
+            val new_tcp = new_world._1.pop.totalConversionPropensity(new_res)
           }
-          case "Landscape-ESmod" => {
-            val new_ncc = EcoLandscape.naturalConnectedComponents(new_world._1.eco)
-            val new_ncc_area = EcoLandscape.nccAreaDistribution(new_ncc)
-            val new_area_graph = Ecolandscape.nccAreaGraph(new_world._1.eco,new_ncc,new_ncc_area,new_world._1.args.size)
-            val new_es_flow = EcoLandscape.esFlow(new_area_graph,new_world._1.args.z)
-            val new_es_graph = EcoLandscape.esGraph(new_world._1.eco,new_es_flow)
-            val new_res = EcoLandscape.resources(es_graph,new_world._1.args.y_es,new_world._1.args.his)
-            val new_popp = HumanPop.propensities(0.0,new_world._1.pop,new_res)
-            val new_spontp = EcoLandscape.allSpontaneous(new_popp._2,new_es_graph,(new_world._1.args.s1,new_world._1.args.s2,new_world._1.args.s3))
-            val new_tcp = new_world._1.args.s4 * HumanPop.resourceDemand(new_world._1.pop,new_res)
-          }
-          case "Landscape-ESnomod" => {
+          case HighIntensityFertilityLoss => {
             val new_ncc = ncc
-            val new_ncc_area = ncc_area
-            val new_area_graph = area_graph
-            val new_es_flow = es_flow
-            val new_es_graph = es_graph
+            val new_es = es
             val new_res = res - 1.0 // this is just loosing one high intensity unit
-            val new_popp = HumanPop.propensities(0.0,new_world._1.pop,new_res)
-            val new_spontp = EcoLandscape.allSpontaneous(new_popp._2,new_es_graph,(new_world._1.args.s1,new_world._1.args.s2,new_world._1.args.s3))
-            val new_tcp = new_world._1.args.s4 * HumanPop.resourceDemand(new_world._1.pop,new_res)
+            val new_popp = new_world._1.pop.propensities(0.0,new_res)
+            val new_spontp = new_world._1.eco.updatePropensities(new_popp._2,new_es)
+            val new_tcp = new_world._1.pop.totalConversionPropensity(new_res)
+          }
+          case other => {
+            val (new_ncc, new_es) = new_world._1.eco.ecosystemServiceFlow
+            val new_res = new_world._1.eco.resourceProduction(es)
+            val new_popp = new_world._1.pop.propensities(0.0,res)
+            val new_spontp = new_world._1.eco.updatePropensities(popp._2,es)
+            val new_tcp = new_world._1.pop.totalConversionPropensity(res)
           }
         }
-        rec(new_world._1,new_ncc,new_ncc_area,new_area_graph,new_es_flow,new_es_graph,new_res,new_popp,new_spontp,new_tcp)
+        rec(new_world._1,new_ncc,new_es,new_res,new_popp,new_spontp,new_tcp)
       }
     }
-    rec(this,ncc,ncc_area,area_graph,es_flow,es_graph,res,popp,spontp,tcp)
+    rec(this,ncc,es,res,popp,spontp,tcp)
   }
 
 }
