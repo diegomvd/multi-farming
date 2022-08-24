@@ -1,14 +1,36 @@
 /**
-This object provides all the funcitons to manipulate a biophysical landscape
-represented as a graph of ecological units connected by their manhattan distance
-in an hexagonal lattice. An ecological landscape is built given its radius and
-the ecological connectivity range. The functions defined in the object provide
-the following functionalities:
+The Ecological Landscape is implemented in the EcoLandscape case class and
+companion object. An ecological landscape is a group of Ecological Units. The
+composition is stored in a graph where edges describe functional connectivity
+and not adjacency in space. The distance for functional connectivity is determined
+by the Ecological Connectivity Range parameter (ecr).There is a number of parameters
+of the EcoLandscape related to :
 
-1- Build, initialize and update a composition graph
-2- Calculate connected natural components and ecosystem service flow
-3- Calculate cummulative propensities of spontaneous land-cover transitions
-4- Calculate resource production at the whole landscape level
+  @param ecr: Ecological Connecvitiy Range
+  @param scalexp: the scaling exponent of the power-law ecosystem services-area
+  relationship
+  @param yes: contribution of ecosystem services to agricultural production in
+  low-intensity units
+  @param his: the number of households that can be supported by a single high-
+  intensity unit. This is used in the production function.
+  @param srec: sensitivity of land recovery propensity to ecosystem service
+  provision. Higher sensitivity means more response to ecosystem services.
+  @param sdeg: idem for degradation.
+  @param sflo: idem for fertility loss.
+
+The EcoLandscape must be first built with the apply method of the companion object
+and then initialized since it requires the generation of planning and management
+landscape that depend on the structure for that. The initialized EcoLandscape is
+as close to equilibrium with the population size as possible and with a spatial
+structure built mimicking the spatial processes f the simulation given the parameters.
+This effort in coherence, instead of just a random landscape, is to guarantee that
+the transient at the beginning of the simulation is as short as possible and that
+we do not start with a regime change.
+
+Key functions are:
+  - Update the landscape composition.
+  - Initialize the landscape.
+  - Count types of units as a metric.
 */
 
 import org.apache.spark._

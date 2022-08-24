@@ -1,8 +1,11 @@
 /**
-EcoUnits are the key base constituants of the biophysical landscape. They are
-only defined by their land cover type. In this class's companion object are
-defined the functions used at the EcoUnit level to calculate spontaneous propensities
-and resource production.
+Ecological Units are implemented in the EcoUnit case class and companion object.
+Ecological Units are the elementary constitutant of the Ecological Landscape and
+are defined by its land cover.
+
+@author diego
+
+TODO: write the expression of the production in low-intensity ecounits.
 */
 
 case class EcoUnit(cover: LandCover):

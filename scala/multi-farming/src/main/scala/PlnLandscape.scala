@@ -1,9 +1,19 @@
 /**
-The PlnLandscape object provides all the functions needed to interact with a
-planning landscape represented by a graph of PlnUnits. Key functions are:
-1- Build a planning landscape given the radius of the biophysical landscape
-2- Determine neighbor availability to influence conversion weights
-3- Get all the planning units within a management unit extended by their neighborhood
+The Planning Landscape is implemented in the PlnLandscape case class and companion
+object. A Planning Landscape is described by its composition, the relative scale
+to the EcoLandscape and its size which is the number of Planning Units, determined
+by the size of the Ecological Landscape and the scale. The composition is a graph
+of Planning Units where the existence of an edge between two units mean they are
+adjacent.
+The role of the Planning Landscape is to stock the adjacency between Planning Units
+to be able to determine which units have un/available neighbors to determine the
+conversion propensities.
+
+@author diego
+
+TODO: I am not usre that ajacency is determined correctly in the voronoi tesselation
+because neighborhood in the EcoLandscape is functional connectivity rather than
+adjacency
 */
 
 import org.apache.spark._
@@ -20,13 +30,27 @@ case class PlnLandscape(
   size: Int)
   extends TopLandscape with BaseLandscape with SpatialStochasticEvents:
 
-    def availableNeighbors(eco: Graph[EcoUnit,Long]): VertexRDD[VertexId] =
-      PlnLandscape.neighborAvailability(this.composition,eco,True)
+    /**
+    @param mngunit is the sample of the PlanningLandscape (Management Unit) for
+    which we want to determine neighbor availability
+    @param eco is the composition of the base EcoLandscape
+    @return the number of available neighbors for each PlanningUnit belonging to
+    */
+    def availableNeighbors(
+      mngunit: ParVector[VertexId],
+      eco: Graph[EcoUnit,Long]):
+      VertexRDD[Int] =
+        PlnLandscape.neighborAvailability(this.subLandscape(mngunit),eco,True)
 
-    def unavailableNeighbors(eco: Graph[EcoUnit,Long]): VertexRDD[VertexId] =
-      PlnLandscape.neighborAvailability(this.composition,eco,False)
+    def unavailableNeighbors(
+      mngunit: ParVector[VertexId],
+      eco: Graph[EcoUnit,Long]):
+      VertexRDD[Int] =
+        PlnLandscape.neighborAvailability(this.subLandscape(mngunit),eco,False)
 
     /**
+    @param mngunit is the sample of the PlanningLandscape (Management Unit) for
+    which we want to determine neighbor availability
     @return a sub graph of the planning landscape composition consisting on a
     given management unit
     */

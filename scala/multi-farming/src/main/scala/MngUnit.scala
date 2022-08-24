@@ -1,8 +1,10 @@
 /**
-The MngUnit class represents a management unit. Management units are composed by
-a set of planning units stored as a VertexRDD that stores the VertexIds of the
-contained planning units in the planning landscape's composition graph. Management
-units are also defined by their management strategy encoded as a String.
+The Management Unit is implemented in the MngUnit case class and companion object.
+A Management Unit is defined by its composition which is a set of VertexIds of
+the Planning Units in the Planning Landscape and its management strategy that
+determines how the agricultural conversion is structured in space and intensity.
+The composition and strategy are determined at initialization and for the time
+being cannot be changed over the course of the simulation.
 Key functions are:
 1- Determine availability for agricultural conversion in management unit
 2- Determine conversion propensities for each planning unit inside the management unit
@@ -18,6 +20,16 @@ case class MngUnit(
   composition: ParVector[VertexId],
   strategy: MngStrategy):
 
+  /**
+  This function serves to build the probability of choosing any of the Management
+  Units of the Managament Landscape given a certain conversion propensity. Only
+  available Managment Units can be chosen.
+  @param pln is the composition of the Planning Landscape that serves as base for
+  the Management Landscape
+  @param eco is the composition of the Ecological Landscape that serves as base
+  for the Planning Landscape
+  @return true if the unit is availble, false if it isn't
+  */
   def isAvailable(
     pln: Graph[PlnUnit,Long],
     eco: Graph[EcoUnit,Long]):
@@ -38,7 +50,7 @@ case class MngUnit(
     utcp: Double,
     pln: PlnLandscape,
     eco: Graph[EcoUnit,Long]):
-    VertexRDD[Double] =
+    ListMap[VertexId,Double] =
       // this step is to calculate the individual propensities, sort them by vertexId and store in a ListMap
       val prop: ListMap[VertexId,Double] = ListMap(MngUnit.weights(this.composition,pln,eco,this.strategy).mapValues(_ * utcp).collect.toSeq.sortWith(_._1 < _._1):_*)
       // this step effectuates the cummulative sum starting with the initial value and yields the cummulatie propensities scaled to the rest of the world's propensities
@@ -50,7 +62,7 @@ object MngUnit :
 
   /**
   @param comp is the composition of the management unit
-  @param pln is the planning landscape composition graph
+  @param pln is the planning landscape
   @param eco is the biophysical landscape composition graph
   @param stg is the management strategy of the unit
   @return a VertexRDD with the relative conversion probability associated to each PU

@@ -1,3 +1,8 @@
+/**
+This trait can be used to extend a landscape. All the functions are defined in
+its companion object.
+*/
+
 import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD

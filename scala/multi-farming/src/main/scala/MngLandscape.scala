@@ -1,7 +1,15 @@
 /**
-This object provides all the functions needed to interact with a management
-landscape represented by a graph of MngUnits. The key functions are:
-1- Build the management landscape
+The Management Landscape is implemented in the MngLandscape case class and
+companion object. The Management Landscape is described by its composition: a
+graph of Managment Units, its scale relative to the Planning Landscape, the
+number of units of Sparing type (all the other are  Sharing) and its size,
+partially determined by the scale.
+The Managment Landscape is instantiated at initialization and does not change
+during the simulation.
+The main function of this class is to calculate the propensity of choosing any
+Managment Unit for conversion.
+
+@author diego
 */
 
 import org.apache.spark._
