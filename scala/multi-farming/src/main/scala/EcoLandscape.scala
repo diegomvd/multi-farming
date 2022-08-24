@@ -208,18 +208,4 @@ object EcoLandscape :
       rec(eco, pln, mng, n_agr, n_deg)
     }
 
-  /**
-  @return a graph joining the ecounits with the ES flow they receive
-  */
-  def joinCompAndEcoServices(
-    comp: Graph[EcoUnit,Long],
-    es: VertexRDD[Double]):
-    Graph[(EcoUnit,Double),Long] = {
-     comp.outerJoinVertices(es){ (vid, eu, es_opt) =>
-       es_opt match {
-         case Some(es) => (eu, es)
-         case None => (eu, 0.0)
-       }
-     }
-  }
 end EcoLandscape

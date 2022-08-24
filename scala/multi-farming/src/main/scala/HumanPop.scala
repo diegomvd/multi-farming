@@ -40,7 +40,7 @@ case class HumanPop(
   @param ival is the initial value for the cummulative sum of the propensities
   @return a tuple with birth and death propensities in first and second positions respectively
   */
-  def propensities(
+  def demographicPropensities(
     ival: Double,
     resources: Double):
     (Double,Double) =

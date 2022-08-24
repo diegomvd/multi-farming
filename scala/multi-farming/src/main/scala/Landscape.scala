@@ -85,23 +85,15 @@ enum MngStrategy(clustering: Double):
 hierarchical nested enums for the event types
 */
 enum EventType:
-  case SpontaneousEvent
-  case ConversionEvent
-  case DemographicEvent:
-
-enum SpontaneousEvent:
+  case Spontaneous
+  case Conversion
+  case Demographic
   case Recovery
   case Degradation
-  case FertilityLossEvent
-
-enum FertilityLossEvent:
+  case FertilityLoss
   case LowIntensityFertilityLoss
   case HighIntensityFertilityLoss
-
-enum ConversionEvent:
   case LowIntensityConversion
   case HighIntensityConversion
-
-enum DemographicEvent:
   case Birth
   case Death

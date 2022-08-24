@@ -59,7 +59,7 @@ trait SpontaneousPropensities :
   @param s is a tuple of the sensitivities for recovery,degradation and fertility loss transitions
   @return a tuple with the maps containing the propensities of each transition type and the last propensity value to continue cumulative sums
   */
-  def updatePropensities(
+  def spontaneousPropensities(
     ival: Double,
     es_graph: Graph[(EcoUnit,Double),Long]):
     ((ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double],ListMap[VertexId,Double]), Double) = {
