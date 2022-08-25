@@ -44,20 +44,20 @@ case class HumanPop(
     ival: Double,
     resources: Double):
     (Double,Double) =
-      val birth: Double = birthPropensity(ival)
-      val death: Double = deathPropensity(birth,this.size,resources)
+      val birth: Double = HumanPop.birthPropensity(ival)
+      val death: Double = HumanPop.deathPropensity(birth,this.size,resources)
       (birth,death)
 
-object HumanPop{
+object HumanPop :
 
   def apply(resources: Double, sres: Double): Int = HumanPop(resources.toInt,sres)
-  def birth(size: Int): Double = size + 1
-  def death(size: Int): Double = size - 1
+  def birth(size: Int): Int = size + 1
+  def death(size: Int): Int = size - 1
   def birthPropensity(ival: Double): Double = ival + 1.0
   def deathPropensity(
     ival: Double,
     size: Int,
     resources: Double): Double =
-      ival + //function here
+      ival + 0.0 //function here
 
 end HumanPop

@@ -10,7 +10,7 @@ TODO: write the expression of the production in low-intensity ecounits.
 
 case class EcoUnit(cover: LandCover):
 
-  def matchCover(c: LandCover): Bool =
+  def matchCover(c: LandCover): Boolean =
     EcoUnit.matchCover(this.cover,c)
 
 object EcoUnit:
@@ -20,7 +20,7 @@ object EcoUnit:
   @param c2 second land cover type
   @return true if both covers are equal, false if not
   */
-  def matchCover(c1: String, c2: String): Bool =  c1 == c2
+  def matchCover(c1: LandCover, c2: LandCover): Boolean =  c1 == c2
 
   /**
   @param s is the sensitivity to ecosystem service inflow
@@ -36,11 +36,12 @@ object EcoUnit:
   @param es is the ecosystem service inflow
   @return the potential resource production in this ecological unit
   */
-  def lowIntResEquation(y1: Double,
-                        y2: Double,
-                        es: Double): Double = {
+  def lowIntResEquation(
+    y1: Double,
+    y2: Double,
+    es: Double): Double = 0.0 // TODO: fill the function
 
-  }
+
   def highIntResEquation(): Double = 1.0
 
 end EcoUnit

@@ -9,19 +9,14 @@ trait Agriculture:
   /**
   @param yes is the contribution of ES to resource production in LI units
   @param his is the number of households that can be supported by the production of one HI unit
-  @param production is the actual resource production
-  The production is stored as a field to avoid unnecessary recalculation after
-  landscape updates that do not change ES. The unique transition concerned is
-  fertility loss in HI units but since production is rescaled by HI production
-  this operation reduces to substracting 1 to the previous resources.
   */
   val yes: Double
   val his: Double
 
   // function for every other landscape transforming transition
-  def resourceProduction(esgraph: Graph[(EcoUnit,Double) Long]): Double =
+  def resourceProduction(esgraph: Graph[(EcoUnit,Double), Long]): Double =
     Agriculture.calculateProduction(ecocomp,yes,his)
-  
+
 
 
 object Agriculture:
@@ -35,14 +30,15 @@ object Agriculture:
   def lowIntResources(
     es_graph: Graph[(EcoUnit,Double),Long],
     y1: Double,
-    y2: Double): Double = {
-    // this function creates a subgraph and then traverses it, another option would be
-    // to traverse the whole graph and match at each node agains the cover to calculate production
-    // i am not sure what is the optimal. Creating a subgraph seems expensive, but at the
-    // same time the subgraph function might be optimized within spark
-    val low_intensity = es_graph.subgraph(vpred = (vid,(eu,_)) => eu.cover == LowIntensity)
-    low_intensity.vertices.mapValues{ case (eu, es) => EcoUnit.lowIntResEquation(y1,y2,es) }.reduce( _+_ )
-  }
+    y2: Double):
+    Double =
+      // this function creates a subgraph and then traverses it, another option would be
+      // to traverse the whole graph and match at each node agains the cover to calculate production
+      // i am not sure what is the optimal. Creating a subgraph seems expensive, but at the
+      // same time the subgraph function might be optimized within spark
+      val low_intensity = es_graph.subgraph(vpred = (vid,(eu,x)) => eu.cover == LowIntensity )
+      low_intensity.vertices.mapValues{ case (eu, es) => EcoUnit.lowIntResEquation(y1,y2,es) }.reduce( _+_ )
+
 
   /**
   @return the total amount of resources produced in the high-intensity units

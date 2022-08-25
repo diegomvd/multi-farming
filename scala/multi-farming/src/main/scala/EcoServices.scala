@@ -3,13 +3,14 @@ This trait can be used to extend a landscape. All the functions are defined in
 its companion object. From the trait we only calculate ecosystem services flow
 returned as a graph and the natural connected components as metric of fragmentation.
 */
+import scala.math.pow
 
 import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
-import scala.math.pow
+
 
 trait EcoServices :
 
@@ -91,7 +92,7 @@ object EcoServices :
           else triplet.sendToDst((1,0.0))
         },
         (a,b) => (a._1 + b._1, a._2 + b._2)
-      ).mapValues( (id,val) => val._2/val._1 )
+      ).mapValues( (id,value) => value._2/value._1 )
 
   /**
   @param eco is the composition of the ecological landscape
@@ -193,7 +194,7 @@ object EcoServices :
                        z: Double,
                        size: Int,
                        n: Int): Double = {
-    (0 until n).flatMap( case i => robustnessESFlowOneReplica(average,eco,z,size) ).reduce((a,b) => a + b)/n
+    (0 until n).flatMap( i => robustnessESFlowOneReplica(average,eco,z,size) ).reduce((a,b) => a + b)/n
   }
 
 end EcoServices

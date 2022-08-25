@@ -127,7 +127,7 @@ object EcoLandscape :
     mng: MngLandscape,
     fagr: Double,
     fdeg: Double):
-    EcoLandscape = {
+    EcoLandscape =
 
       val n_agr: Int = size*fagr.toInt
       val n_deg: Int = size*fdeg.toInt
@@ -139,17 +139,17 @@ object EcoLandscape :
         eco: EcoLandscape,
         pln: PlnLandscape,
         mng: MngLandscape):
-        Graph[EcoUnit,Long] = {
+        Graph[EcoUnit,Long] =
           val x_rnd: Double = rnd.nextDouble( 1.0 )
           World.applyConversionEvent(x_rnd,eco,pln,mng,1.0)
-      }
 
-      def initializeDegradedUnit(eco: EcoLandscape): EcoLandscape = {
+
+      def initializeDegradedUnit(eco: EcoLandscape): EcoLandscape =
         val propensity = eco.degradationPropensity(0.0, joinCompAndEcoServices(eco.composition,eco.ecosystemServicesFlow), 1.0)
         val xrnd = rnd.nextDouble(propensity.last._2)
         val vid = eco.selectVId(xrnd,propensity)
         eco.update(vid, Degraded)
-      }
+
 
       /**
       @param n is a tuple with the number of remaining agricultural units to put first and the remaining degraded units second
@@ -161,23 +161,22 @@ object EcoLandscape :
         n: (Int,Int),
         transition: EventType,
         step: Int):
-        (Int,Int) = {
+        (Int,Int) =
           transition match{
-            case Conversion =>{
+            case Conversion => {
               val upd_n_deg = n._2
-              if n._1>0 { val upd_n_agr = n._1 - step }
+              if n._1>0 then { val upd_n_agr = n._1 - step }
               else {val upd_n_agr = n._1}
             }
-            case Degradation =>{
+            case Degradation => {
               val upd_n_agr = n._1
-              if n._2>0 { val upd_n_deg = n._2 - step }
+              if n._2>0 then { val upd_n_deg = n._2 - step }
               else {val upd_n_deg = n._1}
             }
           }
           (upd_n_agr,upd_n_deg)
-        }
 
-      @annotation.tailrec
+      @tailrec
       def rec(eco: EcoLandscape,
               pln: PlnLandscape,
               mng: MngLandscape,
@@ -194,7 +193,7 @@ object EcoLandscape :
               val old_agr: Int = eco.countAgricultural
               val upd_eco: Graph[EcoUnit,Long] = initializeAgriculturalUnit(eco,pln,mng)
               val new_agr: Int = upd_eco.countAgricultural
-              val step: new_agr - old_agr
+              val step: Int = new_agr - old_agr
               val n_remaining: (Int,Int) = updateRemaining((n_agr,n_deg),Conversion,step)
             }
             case n_rnd if n_rnd<n_deg => { // Degradation transition is chosen
@@ -206,6 +205,6 @@ object EcoLandscape :
         }
       }
       rec(eco, pln, mng, n_agr, n_deg)
-    }
+
 
 end EcoLandscape

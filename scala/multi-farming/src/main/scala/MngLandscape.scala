@@ -37,7 +37,7 @@ case class MngLandscape(
     eco: Graph[EcoUnit, Long]):
     ListMap[VertexId,Double] =
       val prop: ListMap[VertexId,Double] = ListMap(MngLandscape.probabilities(this.composition,pln,eco).mapValues(_ * tcp).collect.toSeq.sortWith(_._1 < _._1):_*)
-      prop.scanLeft((-1L,ival))( (pre, k -> v) => k -> v + pre._2 )
+      prop.scanLeft((-1L,ival))( (pre, (k, v)) => k -> v + pre._2 )
 
 object MngLandscape :
 
@@ -58,8 +58,8 @@ object MngLandscape :
       val nsparing = fs * nm
       val sparing_ids: VertexRDD[ParVector[PlnUnit]] = rnd.shuffle(tess_graph.vertices).take((fs * nsparing).toInt)
       val comp = tess_graph.mapValues{ (vid,vec) =>
-        if sparing_ids.contains((vid,vec)) { MngUnit(vec,LandSparing) }
-        else { MngUnit(vec,LandSharing) }
+        if sparing_ids.contains((vid,vec)) then MngUnit(vec,LandSparing)
+        else MngUnit(vec,LandSharing)
       }
       MngLandscape(comp,mngscale,nsparing,nu)
 

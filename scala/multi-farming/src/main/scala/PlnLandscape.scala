@@ -25,7 +25,7 @@ import scala.math.pow
 import scala.math.max
 
 case class PlnLandscape(
-  composition: Graph[PlnUnit,Long]
+  composition: Graph[PlnUnit,Long],
   scale: Double,
   size: Int)
   extends TopLandscape with BaseLandscape with SpatialStochasticEvents:

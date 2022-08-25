@@ -8,6 +8,8 @@ state or surpassing the maximumt time specified by the user.
 @author diego
 */
 
+import scala.annotation.tailrec
+
 case class Matrix(
   t: Double,
   eco: EcoLandscape,
@@ -24,10 +26,10 @@ case class Matrix(
   @return a boolean determining whether the simulation should stop or not
   */
   def doesNotHaveNext(maxT: Double): Boolean =
-    val pred_time: Bool = this.t > maxT
-    val pred_pop: Bool = this.pop.size == 0
-    val pred_deg: Bool = this.eco.countNatural() == 0
-    val pred_nat: Bool = this.eco.countNatural() == this.eco.size
+    val pred_time: Boolean = this.t > maxT
+    val pred_pop: Boolean = this.pop.size == 0
+    val pred_deg: Boolean = this.eco.countNatural() == 0
+    val pred_nat: Boolean = this.eco.countNatural() == this.eco.size
     (pred_time || pred_pop || pred_deg || (pred_nat && pred_pop))
 
   /**
@@ -42,7 +44,7 @@ case class Matrix(
   */
   def simulate(maxT: Double): Matrix =
 
-    val (ncc, pre_es) = this.eco.ecosystemServiceFlow
+    val (ncc, es) = this.eco.ecosystemServiceFlow
     val res = this.eco.resourceProduction(es)
     val popp = this.pop.demographicPropensities(0.0,res)
     val spontp = this.eco.spontaneousPropensities(popp._2,es)
@@ -60,7 +62,7 @@ case class Matrix(
       tcp: Double):
       Matrix =
         // return the current state of the Matrix if the simulation is to stop
-        if world.doesNotHaveNext(maxT) { world }
+        if world.doesNotHaveNext(maxT) then world
 
         else {
           // get the new world and in function of the event type actualize

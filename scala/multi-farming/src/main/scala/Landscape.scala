@@ -20,7 +20,7 @@ trait Landscape:
   val size: Int
 
   def updateComposition(a: A, b: A): Graph[A, Long] =
-    composition.mapValues(case a => b)
+    composition.mapValues(a => b)
 
   def updateComposition(a: VertexRDD[A], b: A): Graph[A, Long] =
     composition.mapValues{ case (vid,attr) if a.contains((vid,attr)) => b }
@@ -78,8 +78,8 @@ but in some way "clustering" with non-agricultural. Land sparing prefers cluster
 agricultural land together.
 */
 enum MngStrategy(clustering: Double):
-  case LandSharing(clustering = 3.0)
-  case LandSparing(clustering = 3.0)
+  case LandSharing extends MngStrategy(3.0)
+  case LandSparing extends MngStrategy(3.0)
 
 /**
 hierarchical nested enums for the event types
