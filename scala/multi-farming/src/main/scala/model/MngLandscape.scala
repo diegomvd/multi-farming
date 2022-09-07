@@ -61,7 +61,7 @@ object MngLandscape :
     val sparing_ids: Array[(VertexId,ParVector[VertexId])] = rnd.shuffle(tess_graph.vertices.collect).toArray.take( (fs * n_sparing).toInt )
     val comp = tess_graph.mapVertices{ (vid,vec) =>
       if sparing_ids.contains((vid,vec)) then MngUnit(vec,MngStrategy.LandSparing)  else MngUnit(vec,MngStrategy.LandSharing)
-    }(classTag[MngUnit])
+    }
     MngLandscape(comp,scale,n_sparing.toInt,nm)
 
   /**

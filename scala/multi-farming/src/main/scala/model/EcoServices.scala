@@ -7,6 +7,7 @@ import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
 import scala.annotation.tailrec
+import scala.reflect._
 
 /**
 Extends a landscape composed by a graph of EcoUnits with ecosystem services functionalities. The trait serves to
@@ -56,12 +57,13 @@ object EcoServices :
     val area_vertices: VertexRDD[Double] = ncc.mapValues{
       (v,c) => ncc_area.getOrElse((v,c),-1L).toDouble
     }
+
     // Create a graph where each node attribute is the normalized area of the
     // natural component the ecological unit with such id belongs to. If the
     // vertex is not a natural cell, then put 0.0 as attribute.
-    eco.outerJoinVertices(area_vertices){ (_, eu, av_opt) =>
-      av_opt match {
-        case Some(vertex_area) => (eu,vertex_area/size) //TODO: check if it is vid or the ecounit attribute that comes here
+    eco.outerJoinVertices[Double,(EcoUnit,Double)](area_vertices){
+      (_, eu, va_opt) => va_opt match {
+        case Some(vertex_area) => (eu,vertex_area/size)
         case None => (eu, 0.0)
       }
     }

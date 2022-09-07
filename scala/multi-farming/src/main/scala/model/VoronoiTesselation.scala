@@ -23,6 +23,40 @@ trait VoronoiTesselation[A] extends SpatialStochasticEvents:
   val composition: Graph[A,Long]
 
   /**
+   * Creates a seeded composition graph to start the tesselation. The function preserves graph structure but changes
+   * vertex attributes by the Id of the voronoi polygon which is the id of the seeded unit, if the unit is not seeded
+   * then the Id is set to -1L.
+   *
+   * @param n_seeds is the number of voronoi seeds to effectuate the tesselation
+   * @param base    is the landscape in which the tesselation is done
+   * @return a seeded graph where vertex attribute is VertexId of seeds in the base landscape.
+   */
+  def seeded(n_seeds: Int): Graph[VertexId, Long] =
+    val seeds: Seq[(Long, Long)] =
+      rnd.shuffle(0 until this.composition.vertices.count.toInt).take(n_seeds).map { i => (i.toLong, i.toLong) }.toSeq
+    this.composition.mapVertices { (vid, _) =>
+      if seeds.contains(vid) then vid else -1L
+    }
+
+  /**
+   * Calculates the edges of the new composition graph emerging from the tesselation.
+   *
+   * @param vertices RDD of the vertices Ids and their attribute: a collection of vertices ids from the base composition
+   *                 graph.
+   * @return an RDD of the edges of the nez landscape. */
+  def newEdges(vertices: RDD[(VertexId, ParVector[VertexId])]): RDD[Edge[Long]] =
+    val nids = this.composition.collectNeighborIds(EdgeDirection.Both)
+
+    // this gets an RDD with all the combinations of 2
+    vertices.cartesian(vertices).filter { case (a, b) =>
+      // this removes duplicates and combination of same vids
+      (a._1 < b._1) || (a._1 == b._1)
+      // now I should check if it exists a vid in iterable a that has as neighbor any vid in iterable b
+    }.collect {
+      case (a, b) if a._2.exists(vid1 => nids.lookup(vid1).head.exists(vid2 => b._2.exists(_ == vid2))) => Edge(a._1, b._1, 0L)
+    }
+
+  /**
    * Performs a Voronoi tesselation over the composition graph given the number of Voronoi polygons to create.
    * @param n_seeds the number of seeds to perform radial growth from. Seeds are randomly positioned with uniform
    *                probability over the landscape units. This is equivalent to the number of Voronoi polygons.
@@ -46,32 +80,13 @@ trait VoronoiTesselation[A] extends SpatialStochasticEvents:
         rec(new_graph)
       }
 
-    val assigned = VoronoiTesselation.seeded(n_seeds,composition)
+    val assigned = this.seeded(n_seeds)
     val assigned_graph: Graph[VertexId, Long] = rec(assigned)
     val vertices: RDD[(VertexId, ParVector[VertexId])] = VoronoiTesselation.groupByPolygon(assigned_graph)
-    val edges: RDD[Edge[Long]] = VoronoiTesselation.newEdges(vertices,composition)
+    val edges: RDD[Edge[Long]] = this.newEdges(vertices)
     Graph(vertices,edges)
 
 object VoronoiTesselation:
-  type A
-  /**
-   * Creates a seeded composition graph to start the tesselation. The function preserves graph structure but changes
-   * vertex attributes by the Id of the voronoi polygon which is the id of the seeded unit, if the unit is not seeded
-   * then the Id is set to -1L.
-   *
-   * @param n_seeds is the number of voronoi seeds to effectuate the tesselation
-   * @param base is the landscape in which the tesselation is done
-   * @return a seeded graph where vertex attribute is VertexId of seeds in the base landscape.
-  */
-  def seeded(
-    n_seeds: Int,
-    base: Graph[A,Long]):
-  Graph[VertexId, Long] =
-    val seeds: Seq[(Long,Long)] =
-      rnd.shuffle(0 until base.vertices.count.toInt).take(n_seeds).map{ i => (i.toLong, i.toLong) }.toSeq
-    base.mapVertices{ (vid,_) =>
-      if seeds.contains(vid) then vid else -1L
-    }
 
   /**
    * Calculates the expansion probability of a Voronoi polygon.
@@ -146,28 +161,6 @@ object VoronoiTesselation:
     // We only want to recover the sequence of base unit Ids and polygon Id
     grouped.mapValues {
       v => v.map( (vid, _ ) => vid ).to(ParVector)
-    }
-
-  /**
-   * Calculates the edges of the new composition graph emerging from the tesselation.
-   * @param vertices RDD of the vertices Ids and their attribute: a collection of vertices ids from the base composition
-   *                 graph.
-   * @param base the base composition graph.
-   * @return an RDD of the edges of the nez landscape. */
-  def newEdges(
-    vertices: RDD[(VertexId, ParVector[VertexId])],
-    base: Graph[A,Long]):
-  RDD[Edge[Long]] =
-
-    val nids = base.collectNeighborIds(EdgeDirection.Both)
-
-    // this gets an RDD with all the combinations of 2
-    vertices.cartesian(vertices).filter{ case (a,b) =>
-     // this removes duplicates and combination of same vids
-     (a._1 < b._1) || (a._1 == b._1)
-     // now I should check if it exists a vid in iterable a that has as neighbor any vid in iterable b
-    }.collect{
-      case (a, b) if a._2.exists(vid1 => nids.lookup(vid1).head.exists(vid2 => b._2.exists(_ == vid2) ) ) => Edge(a._1, b._1, 0L)
     }
 
   /**
