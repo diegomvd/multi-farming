@@ -1,8 +1,8 @@
+package model
 /**
-The human population is implemented in case class and companion object HumanPop.
-Human population is described by its size and its sensitivity to resource deficit
-which controls the celerity of human response to a resource deficit.
-Note: the total conversion propensity is calculated from the HumanPop case class.
+Implementation of the Human Population. HumanPop is defined by its size and its sensitivity to resource demand which 
+determines the celerity of human agricultural expansion response to a lack of resources.
+@note the total conversion propensity is calculated from the HumanPop case class.
 @author diego
 TODO: Still need to write the function for the death propensity
 */
@@ -18,8 +18,8 @@ case class HumanPop(
   */
   def update(demo: EventType): HumanPop =
       demo match {
-        case Birth => this.copy(size = HumanPop.birth(this.size))
-        case Death => this.copy(size = HumanPop.death(this.size))
+        case EventType.Birth => this.copy(size = HumanPop.birth(this.size))
+        case EventType.Death => this.copy(size = HumanPop.death(this.size))
       }
 
   /**
@@ -59,5 +59,20 @@ object HumanPop :
     size: Int,
     resources: Double): Double =
       ival + 0.0 //function here
+
+  /**
+   * Returns the type of Demographic event given a random number and the demographic propensities.
+   *  @param x_rnd the random number thrown to sample the distributions.
+   *  @param prop contains the birth and death propensities in field 1 and 2 respectively.
+   *  @return the Demographic event type: Birth or Death.
+   */
+  def selectBirthOrDeath(
+    x_rnd: Double,
+    prop: (Double, Double)):
+  EventType =
+    x_rnd match {
+      case x if x < prop._1 => EventType.Birth
+      case x if x < prop._2 => EventType.Death
+    }
 
 end HumanPop

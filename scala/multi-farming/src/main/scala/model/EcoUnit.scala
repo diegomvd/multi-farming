@@ -1,15 +1,16 @@
+package model
 /**
-Ecological Units are implemented in the EcoUnit case class and companion object.
-Ecological Units are the elementary constitutant of the Ecological Landscape and
-are defined by its land cover.
-
+Implementation of the Ecological Units. EcoUnits are the elementary constituents of an EcoLandscape and are defined by
+their land cover.
 @author diego
-
-TODO: write the expression of the production in low-intensity ecounits.
+@todo write the expression of the production in low-intensity EcoUnits.
 */
 
 case class EcoUnit(cover: LandCover):
-
+  /**
+   * @param c is the land cover to match against this EcoUnit's cover
+   * @return true if there's a match, false if there's not
+   * */
   def matchCover(c: LandCover): Boolean =
     EcoUnit.matchCover(this.cover,c)
 
@@ -32,7 +33,7 @@ object EcoUnit:
 
   /**
   @param y1 is
-  @param y2 is the contribution of ecosystel services to resource production
+  @param y2 is the contribution of ecosystem services to resource production
   @param es is the ecosystem service inflow
   @return the potential resource production in this ecological unit
   */
@@ -45,3 +46,4 @@ object EcoUnit:
   def highIntResEquation(): Double = 1.0
 
 end EcoUnit
+

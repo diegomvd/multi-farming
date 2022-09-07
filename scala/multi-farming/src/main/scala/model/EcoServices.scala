@@ -1,26 +1,29 @@
-/**
-This trait can be used to extend a landscape. All the functions are defined in
-its companion object. From the trait we only calculate ecosystem services flow
-returned as a graph and the natural connected components as metric of fragmentation.
-*/
+package model
 import scala.math.pow
-
-import org.apache.spark._
-import org.apache.spark.graphx._
+import org.apache.spark.*
+import org.apache.spark.graphx.*
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
+import scala.annotation.tailrec
 
+/**
+Extends a landscape composed by a graph of EcoUnits with ecosystem services functionalities. The trait serves to
+retrieve a graph of ecosystem services flow and the natural connected components as a metric of fragmentation. All the
+intermediate functions are located in the companion object.
+ */
 trait EcoServices :
 
-  val size: Double
+  val size: Int
   val scalexp: Double
   val comp: Graph[EcoUnit, Long]
 
+  /**
+   * @return a tuple containing the natural connected components and graph of ecosystem services flow
+   * */
   def ecosystemServiceFlow: (VertexRDD[VertexId], Graph[(EcoUnit,Double),Long]) =
     EcoServices.calculateEcoServices(comp,scalexp,size)
-
 
 object EcoServices :
 
@@ -29,9 +32,8 @@ object EcoServices :
   @return the vertices in the connected components graph
   */
   def naturalConnectedComponents(eco: Graph[EcoUnit, Long]): VertexRDD[VertexId] =
-    val natural = eco.subgraph(vpred = (vid,eu) => eu.cover == Natural)
+    val natural = eco.subgraph(vpred = (_,eu) => eu.cover == LandCover.Natural)
     natural.connectedComponents().vertices
-
 
   /**
   @param ncc is the natural connected components, VertexRDD is over the EcoUnits and VertexId refers to the component Id
@@ -50,17 +52,19 @@ object EcoServices :
     ncc: VertexRDD[VertexId],
     ncc_area: Map[(VertexId,VertexId), Long],
     size: Double):
-    Graph[(EcoUnit,Double), Long] =
-      val area_vertices: VertexRDD[Double] = ncc.mapValues{case (uid,cid) => ncc_area.get((uid,cid)).toDouble }
-      // Create a graph where each node attribute is the normalized area of the
-      // natural component the ecological unit with such id belongs to. If the
-      // vertex is not a natural cell, then put 0.0 as attribute.
-      eco.outerJoinVertices(area_vertices){ (id, _, av_opt) =>
-        av_opt match {
-          case Some(vertex_area) => (_,vertex_area/size)
-          case None => (_, 0.0)
-        }
+  Graph[(EcoUnit,Double), Long] =
+    val area_vertices: VertexRDD[Double] = ncc.mapValues{
+      (v,c) => ncc_area.getOrElse((v,c),-1L).toDouble
+    }
+    // Create a graph where each node attribute is the normalized area of the
+    // natural component the ecological unit with such id belongs to. If the
+    // vertex is not a natural cell, then put 0.0 as attribute.
+    eco.outerJoinVertices(area_vertices){ (_, eu, av_opt) =>
+      av_opt match {
+        case Some(vertex_area) => (eu,vertex_area/size) //TODO: check if it is vid or the ecounit attribute that comes here
+        case None => (eu, 0.0)
       }
+    }
 
   /**
   @param a is the area of the natural component
@@ -70,9 +74,8 @@ object EcoServices :
   def esAreaRelation(
     a: Double,
     z: Double):
-    Double =
-      pow(a,z)
-
+  Double =
+    pow(a,z)
 
   /**
   @param area_graph is the biophysical composition of the landscape joined with the ncc area
@@ -82,17 +85,17 @@ object EcoServices :
   def flow(
     area_graph: Graph[(EcoUnit,Double),Long],
     z: Double):
-    VertexRDD[Double] =
-      area_graph.aggregateMessages[(Int,Double)](
-        triplet => {
-          if (triplet.srcAttr._1.cover == "Natural") {
-            // the second attribute is the component's area
-            triplet.sendToDst((1,esAreaRelation(triplet.srcAttr._2, z)))
-          }
-          else triplet.sendToDst((1,0.0))
-        },
-        (a,b) => (a._1 + b._1, a._2 + b._2)
-      ).mapValues( (id,value) => value._2/value._1 )
+  VertexRDD[Double] =
+    area_graph.aggregateMessages[(Int,Double)](
+      triplet => {
+        if (triplet.srcAttr._1.cover == LandCover.Natural) {
+          // the second attribute is the component's area
+          triplet.sendToDst((1,esAreaRelation(triplet.srcAttr._2, z)))
+        }
+        else triplet.sendToDst((1,0.0))
+      },
+      (a,b) => (a._1 + b._1, a._2 + b._2)
+    ).mapValues( (_,value) => value._2/value._1 )
 
   /**
   @param eco is the composition of the ecological landscape
@@ -106,14 +109,14 @@ object EcoServices :
     scalexp: Double,
     size: Int,
     ncc: VertexRDD[VertexId]):
-    VertexRDD[Double] =
-      val ncc_area: Map[(VertexId,VertexId),Long] = nccAreaDistribution(ncc)
-      val area_graph: Graph[(EcoUnit,Double),Long] = nccAreaGraph(eco,ncc,ncc_area,size)
-      flow(area_graph,scalexp)
+  VertexRDD[Double] =
+    val ncc_area: Map[(VertexId,VertexId),Long] = nccAreaDistribution(ncc)
+    val area_graph: Graph[(EcoUnit,Double),Long] = nccAreaGraph(eco,ncc,ncc_area,size)
+    flow(area_graph,scalexp)
 
   /**
   @param ecocomp is the composition of the ecological landscape
-  @param scalexp is the exponent of the ecosystem services area relationsihp
+  @param scalexp is the exponent of the ecosystem services area relationship
   @param size is the size of the ecological landscape
   @return a tuple with the natural connected components and the joined graph of ES flow
   */
@@ -121,19 +124,19 @@ object EcoServices :
     ecocomp: Graph[EcoUnit, Long],
     scalexp: Double,
     size: Int):
-    (VertexRDD[VertexId], Graph[(EcoUnit,Double),Long] ) =
-      val ncc: VertexRDD[VertexId] = naturalConnectedComponents(ecocomp)
-      val es: VertexRDD[Double] = flowDirect(ecocomp,scalexp,size,ncc)
-      (ncc, joinCompAndEcoServices(ecocomp,es))
+  (VertexRDD[VertexId], Graph[(EcoUnit,Double),Long] ) =
+    val ncc: VertexRDD[VertexId] = naturalConnectedComponents(ecocomp)
+    val es: VertexRDD[Double] = flowDirect(ecocomp,scalexp,size,ncc)
+    (ncc, joinCompAndEcoServices(ecocomp,es))
 
   /**
-  @return a graph joining the ecounits with the ES flow they receive
+  @return a graph joining the EcoUnits with the ES flow they receive
   */
   def joinCompAndEcoServices(
     comp: Graph[EcoUnit,Long],
     es: VertexRDD[Double]):
     Graph[(EcoUnit,Double),Long] =
-     comp.outerJoinVertices(es){ (vid, eu, es_opt) =>
+     comp.outerJoinVertices(es){ (_, eu, es_opt) =>
        es_opt match {
          case Some(es) => (eu, es)
          case None => (eu, 0.0)
@@ -143,17 +146,13 @@ object EcoServices :
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-  def averageESFlow(eco: Graph[EcoUnit,Long],
-                    z: Double,
-                    size: Int): Double = {
-    esGraph(eco,z,size).vertices.reduce{ ((v, a),(_,b)) => (v, a._2 + b._2) }._2 / size.toDouble
-  }
+ /** def averageESFlow(
+    eco: Graph[EcoUnit,Long],
+    z: Double,
+    size: Int):
+    Double =
+      esGraph(eco,z,size).vertices.reduce{ case ((v, a),(_,b)) => (v, a._2 + b._2) }._2 / size.toDouble 
 
-  def averageESFlow(eco: Graph[EcoUnit,Long],
-                    z: Double,
-                    size: Int): Double = {
-    esGraph(eco,z,size).vertices.reduce{ ((v, a),(_,b)) => (v, a._2 + b._2) }._2 / size.toDouble
-  }
 
   /**
   Fraction of natural habitat that needs to be removed with uniform probability to
@@ -165,8 +164,8 @@ object EcoServices :
                                  size: Int): Double = {
 
       val thr: Double = average * 0.5
-      val vid: VertexId = rnd.shuffle( eco.subgraph(vpred = (_,eu) => eu.cover == "Natural").vertices.collect() ).take(1)._1
-      val new_eco: Graph[EcoUnit,Long] = eco.mapValues{ case (v,_) if v == vid => (v, "Degraded") }
+      val vid: VertexId = rnd.shuffle( eco.subgraph(vpred = (_,eu) => eu.cover == Natural).vertices.collect() ).take(1)._1
+      val new_eco: Graph[EcoUnit,Long] = eco.mapValues{ case (v,_) if v == vid => (v, Degraded) }
       val new_avg: Double = averageESFlow(new_eco,z,size)
       val n: Int = 1
 
@@ -180,13 +179,13 @@ object EcoServices :
         if(current_avg <= thr) { n }
         else {
           val new_n: Int = n + 1
-          val vid: VertexId = rnd.shuffle( eco.subgraph(vpred = (_,eu) => eu.cover == "Natural").vertices.collect() ).take(1)._1
-          val new_eco: Graph[EcoUnit,Long] = eco.mapValues{ case (v,_) if v == vid => (v, "Degraded") }
+          val vid: VertexId = rnd.shuffle( eco.subgraph(vpred = (_,eu) => eu.cover == Natural).vertices.collect() ).take(1)._1
+          val new_eco: Graph[EcoUnit,Long] = eco.mapValues{ case (v,_) if v == vid => (v, Degraded) }
           val new_avg: Double = averageESFlow(new_eco,z,size)
           rec(thr,new_avg,new_eco,z,size,new_n)
         }
       }
-      rec(thr,new_avg,new_eco,z,size,n) / eco.subgraph(vpred = (_,eu) => eu.cover == "Natural").vertices.count.toInt
+      rec(thr,new_avg,new_eco,z,size,n) / eco.subgraph(vpred = (_,eu) => eu.cover == Natural).vertices.count.toInt
   }
 
   def robustnessESFlow(average: Double,
@@ -194,7 +193,7 @@ object EcoServices :
                        z: Double,
                        size: Int,
                        n: Int): Double = {
-    (0 until n).flatMap( i => robustnessESFlowOneReplica(average,eco,z,size) ).reduce((a,b) => a + b)/n
+    (0 until n).flatMap( _ => robustnessESFlowOneReplica(average,eco,z,size) ).reduce((a,b) => a + b)/n
   }
-
+*/
 end EcoServices
