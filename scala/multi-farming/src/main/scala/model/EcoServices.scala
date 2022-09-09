@@ -1,13 +1,18 @@
 package model
 import scala.math.pow
+
+/*
 import org.apache.spark.*
 import org.apache.spark.graphx.*
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
+*/
 
 import scala.annotation.tailrec
 import scala.reflect._
+import scalax.collection.Graph
+import scalax.collection.GraphPredef._, scalax.collection.GraphEdge._
 
 /**
 Extends a landscape composed by a graph of EcoUnits with ecosystem services functionalities. The trait serves to
@@ -17,133 +22,78 @@ intermediate functions are located in the companion object.
 trait EcoServices :
 
   val size: Int
-  val scalexp: Double
-  val comp: Graph[EcoUnit, Long]
+  val scal_exp: Double
+  val comp: Graph[EcoUnit, UnDiEdge]
 
   /**
-   * @return a tuple containing the natural connected components and graph of ecosystem services flow
+   * @return a map with the EcoUnit as key and their incoming ES flow as value
    * */
-  def ecosystemServiceFlow: (VertexRDD[VertexId], Graph[(EcoUnit,Double),Long]) =
-    EcoServices.calculateEcoServices(comp,scalexp,size)
+  def ecoServices: Map[EcoUnit, Double]  =
+    val ncc = EcoServices.naturalConnectedComponents(this.comp)
+    val ncm = EcoServices.nodeComponentMembership(ncc)
+    val nam = EcoServices.nccNormalizedAreaMap(ncc,this.size.toDouble)
+    val out = EcoServices.outgoingEcoServicePerUnit(ncm,nam,this.scal_exp)
+    EcoServices.incomingEcoServicePerUnit(this.comp,out)
+
+  /**
+   *  @return the set of disconnected natural connected components
+   */
+  def naturalConnectedComponents: Map[Long, Graph[EcoUnit, UnDiEdge]] =
+    this.comp.componentTraverser(subgraphNodes = n => n.matchCover(LandCover.Natural)).map(_.toGraph).zipWithIndex.map(_.swap).toMap
 
 object EcoServices :
 
   /**
-  @param eco is the biophysical landscape's composition graph
-  @return the vertices in the connected components graph
-  */
-  def naturalConnectedComponents(eco: Graph[EcoUnit, Long]): VertexRDD[VertexId] =
-    val natural = eco.subgraph(vpred = (_,eu) => eu.cover == LandCover.Natural)
-    natural.connectedComponents().vertices
+   * Creates a Map with EcoUnits as keys and NCC id as value.
+   *
+   * @param ncc the map of natural connected components
+   * @return the ecounit-ncc map
+   * */
+  def nodeComponentMembership(ncc: Map[Long, Graph[EcoUnit, UnDiEdge]]): Map[EcoUnit, Long] =
+    ncc.flatMap((id, graph) => graph.nodes.toList.map(unit => (unit, id)))
 
   /**
-  @param ncc is the natural connected components, VertexRDD is over the EcoUnits and VertexId refers to the component Id
-  @return a map with the number of units in each component
-  */
-  def nccAreaDistribution(ncc: VertexRDD[VertexId]): Map[(VertexId,VertexId), Long] =
-    ncc.countByValue()
-
-  /**
-  @param size is the total number of EcoUnits in the landscape
-  @param ncc_area is a map with the area of each natural connected component
-  @return a biophysical landscape graph with information on the area of the ncc of each node
-  */
-  def nccAreaGraph(
-    eco: Graph[EcoUnit, Long],
-    ncc: VertexRDD[VertexId],
-    ncc_area: Map[(VertexId,VertexId), Long],
+   * Creates a Map with the NCC id as key and its area in number of nodes as value
+   * @param ncc the map of natural connected components
+   * @return the map ncc-area
+   * */
+  def nccNormalizedAreaMap(
+    ncc: Map[Long, Graph[EcoUnit, UnDiEdge]],
     size: Double):
-  Graph[(EcoUnit,Double), Long] =
-    val area_vertices: VertexRDD[Double] = ncc.mapValues{
-      (v,c) => ncc_area.getOrElse((v,c),-1L).toDouble
-    }
-
-    // Create a graph where each node attribute is the normalized area of the
-    // natural component the ecological unit with such id belongs to. If the
-    // vertex is not a natural cell, then put 0.0 as attribute.
-    eco.outerJoinVertices[Double,(EcoUnit,Double)](area_vertices){
-      (_, eu, va_opt) => va_opt match {
-        case Some(vertex_area) => (eu,vertex_area/size)
-        case None => (eu, 0.0)
-      }
-    }
+  Map[Long,Long] =
+    ncc.map( (id, graph) => (id, graph.nodes.size.toDouble/size) )
 
   /**
-  @param a is the area of the natural component
-  @param z is the scaling exponent of the ecosystem services area relationship
-  @return the value of ecosystem service provision for a component of area a
-  */
+   *  @param a is the area of the natural component
+   *  @param z is the scaling exponent of the ecosystem services area relationship
+   *  @return the value of ecosystem service provision for a component of area a
+   */
   def esAreaRelation(
     a: Double,
     z: Double):
   Double =
-    pow(a,z)
+    pow(a, z)
+
+  def outgoingEcoServicePerUnit(
+    ncm: Map[EcoUnit,Long],
+    nam: Map[Long,Long],
+    scaling_exp: Double):
+  Map[EcoUnit, Double] =
+    ncm.map{ (unit, ncc) => (unit, esAreaRelation(nam.getOrElse(ncc,0.0), scaling_exp) ) }
 
   /**
-  @param area_graph is the biophysical composition of the landscape joined with the ncc area
-  @param z is the scaling exponent of the ecosystem services area relationship
-  @return a VertexRDD with the ecosystem service inflow as an attribute
-  */
-  def flow(
-    area_graph: Graph[(EcoUnit,Double),Long],
-    z: Double):
-  VertexRDD[Double] =
-    area_graph.aggregateMessages[(Int,Double)](
-      triplet => {
-        if (triplet.srcAttr._1.cover == LandCover.Natural) {
-          // the second attribute is the component's area
-          triplet.sendToDst((1,esAreaRelation(triplet.srcAttr._2, z)))
-        }
-        else triplet.sendToDst((1,0.0))
-      },
-      (a,b) => (a._1 + b._1, a._2 + b._2)
-    ).mapValues( (_,value) => value._2/value._1 )
-
-  /**
-  @param eco is the composition of the ecological landscape
-  @param scalexp is the exponent of the ecosystem services area relationsihp
-  @param size is the size of the ecological landscape
-  @param ncc is the natural connected components
-  @return the ES flow in each ecological unit
-  */
-  def flowDirect(
-    eco: Graph[EcoUnit,Long],
-    scalexp: Double,
-    size: Int,
-    ncc: VertexRDD[VertexId]):
-  VertexRDD[Double] =
-    val ncc_area: Map[(VertexId,VertexId),Long] = nccAreaDistribution(ncc)
-    val area_graph: Graph[(EcoUnit,Double),Long] = nccAreaGraph(eco,ncc,ncc_area,size)
-    flow(area_graph,scalexp)
-
-  /**
-  @param ecocomp is the composition of the ecological landscape
-  @param scalexp is the exponent of the ecosystem services area relationship
-  @param size is the size of the ecological landscape
-  @return a tuple with the natural connected components and the joined graph of ES flow
-  */
-  def calculateEcoServices(
-    ecocomp: Graph[EcoUnit, Long],
-    scalexp: Double,
-    size: Int):
-  (VertexRDD[VertexId], Graph[(EcoUnit,Double),Long] ) =
-    val ncc: VertexRDD[VertexId] = naturalConnectedComponents(ecocomp)
-    val es: VertexRDD[Double] = flowDirect(ecocomp,scalexp,size,ncc)
-    (ncc, joinCompAndEcoServices(ecocomp,es))
-
-  /**
-  @return a graph joining the EcoUnits with the ES flow they receive
-  */
-  def joinCompAndEcoServices(
-    comp: Graph[EcoUnit,Long],
-    es: VertexRDD[Double]):
-    Graph[(EcoUnit,Double),Long] =
-     comp.outerJoinVertices(es){ (_, eu, es_opt) =>
-       es_opt match {
-         case Some(es) => (eu, es)
-         case None => (eu, 0.0)
-       }
-     }
+   * Calculates the ecosystem service */
+  def incomingEcoServicePerUnit(
+    comp: Graph[EcoUnit, UnDiEdge],
+    out: Map[EcoUnit, Double]):
+  Map[EcoUnit, Double] =
+    comp.get(1).innerNodeTraverser.foreach[EcoUnit, Double]{ n =>
+      ( n,
+        n.neighbors.foldLeft((0,0.0)){
+          (tuple, neighbor) => (tuple._1 + 1, tuple._2 + out.getOrElse(neighbor,0.0) )
+        }.map(_._2/_._1)
+      )
+    }.toMap
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////

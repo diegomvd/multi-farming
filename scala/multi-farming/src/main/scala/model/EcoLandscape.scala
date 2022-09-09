@@ -1,29 +1,33 @@
 package model
+/*
 import org.apache.spark.*
 import org.apache.spark.graphx.*
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
-
+*/
 import scala.annotation.tailrec
 import scala.collection.immutable.ListMap
 import scala.math.pow
 import scala.util.Random as rnd
 import scala.collection.parallel.immutable.ParVector
 
+import scalax.collection.Graph
+import scalax.collection.GraphPredef._, scalax.collection.GraphEdge._
+
 /**
  *
  * Implementation of the landscape at a biophysical level. An EcoLandscape is composed by EcoUnits stored in a graph where
  * edges represent functional connectivity between units rather that adjacency in space. The class parameters are:
  * ecr: Ecological Connectivity Range
- * scalexp: the scaling exponent of the power-law ecosystem services-area relationship
+ * scal_exp: the scaling exponent of the power-law ecosystem services-area relationship
  * yes: contribution of ecosystem services to agricultural production in low-intensity units
  * his: the number of households that can be supported by a single high-intensity unit. This is used in the production
  * function.
- * srec: sensitivity of land recovery propensity to ecosystem service provision. Higher sensitivity means more response
+ * s_rec: sensitivity of land recovery propensity to ecosystem service provision. Higher sensitivity means more response
  * to ecosystem services.
- * sdeg: idem for degradation.
- * sflo: idem for fertility loss.
+ * s_deg: idem for degradation.
+ * s_flo: idem for fertility loss.
  *
  * The EcoLandscape is first instantiated to initialize the PlnLandscape, MngLandscape and HumanPop, and then initialized
  * using these three objects to produce an initial state as close to equilibrium with the population size as possible and
@@ -34,15 +38,15 @@ import scala.collection.parallel.immutable.ParVector
  *       as argument to a bunch of functions
 */
 case class EcoLandscape(
-  composition: Graph[EcoUnit,Long],
+  composition: Graph[EcoUnit,UnDiEdge],
   size: Int,
   ecr: Int,
-  scalexp: Double,
+  scal_exp: Double,
   yes: Double,
   his: Double,
-  srec: Double,
-  sdeg: Double,
-  sflo: Double)
+  s_rec: Double,
+  s_deg: Double,
+  s_flo: Double)
   extends BaseLandscape[EcoUnit] with Agriculture with EcoServices with SpontaneousPropensities with SpatialStochasticEvents :
 
     /**
@@ -132,27 +136,28 @@ object EcoLandscape :
   * @constructor
   * @param r is the landscape's radius
   * @param ecr is the ecological connectivity range and determines biophysical connections between units
-  * @param scalexp is the scaling exponent of the power-law ecosystem services - area relationship
+  * @param scal_exp is the scaling exponent of the power-law ecosystem services - area relationship
   * @param yes is the contribution of ecosystem services to production in low-intensity units
   * @param his is the number of households that are sustained by one high-intensity unit
-  * @param srec is land recovery sensitivity to ecosystem service provision
-  * @param sdeg is land degradation sensitivity to ecosystem service provision
-  * @param sflo is fertility loss sensitivity to ecosystem service provision
+  * @param s_rec is land recovery sensitivity to ecosystem service provision
+  * @param s_deg is land degradation sensitivity to ecosystem service provision
+  * @param s_flo is fertility loss sensitivity to ecosystem service provision
   * @return an EcoLandscape
   */
 
   def apply(
     r: Int,
     ecr: Int,
-    scalexp: Double,
+    scal_exp: Double,
     yes: Double,
     his: Double,
-    srec: Double,
-    sdeg: Double,
-    sflo: Double): EcoLandscape = {
-      val comp = buildComposition(r,ecr)
-      EcoLandscape(comp,ModCo.area(r),ecr,scalexp,yes,his,srec,sdeg,sflo)
-  }
+    s_rec: Double,
+    s_deg: Double,
+    s_flo: Double):
+  EcoLandscape =
+    val comp = buildComposition(r,ecr)
+    EcoLandscape(comp,ModCo.area(r),ecr,scal_exp,yes,his,s_rec,s_deg,s_flo)
+
 
   /**
   @param r is the radius of the biophysical landscape
@@ -162,16 +167,18 @@ object EcoLandscape :
   def buildComposition(
     r: Int,
     ecr: Int): 
-  Graph[EcoUnit, Long] =
-    val sc: SparkContext
-    val units: RDD[(VertexId, EcoUnit)] =
-      sc.parallelize( ModCo.apply(r).map { m => (m.toLong, EcoUnit(LandCover.Natural)) } )
-    val edges: RDD[Edge[Long]] =
-      sc.parallelize( ModCo.apply(r).toSet.subsets(2).collect{
-          case s if ModCo.neighbors(s.head,r,ecr).contains(s.last) => Edge(s.head.toLong,s.last.toLong,0L)
-        }.toSeq
-      )
-    Graph(units,edges)
+  Graph[EcoUnit, UnDiEdge] =
+    // first create a list of nodes to feed to the graph constructor
+    val nodes: List[EcoUnit] =
+      ModCo.apply(r).map { m => EcoUnit(m.toLong,LandCover.Natural) }.toList
+    // now use the list of nodes to create a list of existing edges based on neighborhood
+    val edges: List[UnDiEdge] =
+      nodes.toSet.subsets(2).collect{
+          case s if ModCo.neighbors(s.head.id,r,ecr).contains(s.last.id) =>
+            UnDiEdge( s.head, s.last )
+        }.toList
+    // instantiate the graph
+    Graph.from(nodes,edges)
 
   /**
   @param fagr is fraction of agricultural units in the initial biophysical landscape
@@ -196,9 +203,10 @@ object EcoLandscape :
         val x_rnd: Double = rnd.nextDouble( )
         val res = eco.resolveConversionEvent(x_rnd,0.0,pln,mng,1.0)
         eco.update(res._1,res._2)
-    
+
+      // TODO: update function takes vid independently of EcoUnit, now the vid is in the EcoUnit
       def initializeDegradedUnit(eco: EcoLandscape): EcoLandscape =
-        val propensity = eco.degradationPropensity(0.0, eco.ecosystemServiceFlow._2 , 1.0)
+        val propensity = eco.degradationPropensity(0.0, eco.ecoServices , 1.0)
         val x_rnd = rnd.between(0.0,propensity.last._2)
         val vid = eco.selectVId(x_rnd,propensity)
         eco.update(vid, EcoUnit(LandCover.Degraded))
