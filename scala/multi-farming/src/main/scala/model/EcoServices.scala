@@ -29,7 +29,7 @@ trait EcoServices :
    * @return a map with the EcoUnit as key and their incoming ES flow as value
    * */
   def ecoServices: Map[EcoUnit, Double]  =
-    val ncc = EcoServices.naturalConnectedComponents(this.comp)
+    val ncc = this.naturalConnectedComponents
     val ncm = EcoServices.nodeComponentMembership(ncc)
     val nam = EcoServices.nccNormalizedAreaMap(ncc,this.size.toDouble)
     val out = EcoServices.outgoingEcoServicePerUnit(ncm,nam,this.scal_exp)
@@ -39,7 +39,7 @@ trait EcoServices :
    *  @return the set of disconnected natural connected components
    */
   def naturalConnectedComponents: Map[Long, Graph[EcoUnit, UnDiEdge]] =
-    this.comp.componentTraverser(subgraphNodes = n => n.matchCover(LandCover.Natural)).map(_.toGraph).zipWithIndex.map(_.swap).toMap
+    this.comp.componentTraverser(subgraphNodes = n => n.toOuter.matchCover(LandCover.Natural)).map(_.toGraph).zipWithIndex.map(_.swap).toMap
 
 object EcoServices :
 

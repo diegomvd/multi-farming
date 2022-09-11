@@ -1,14 +1,17 @@
 package model
 import scala.collection.immutable.ListMap
+/*
 import org.apache.spark.*
 import org.apache.spark.graphx.*
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
-
+*/
 import scala.collection.parallel.immutable.ParVector
 import scala.util.Random as rnd
 import scala.reflect._
+import scalax.collection.Graph
+import scalax.collection.GraphPredef._, scalax.collection.GraphEdge._
 
 /**
 Implementation of the Management Landscape, composed by Management Units. A MngLandscape is extends a TopLandscape and
@@ -19,9 +22,9 @@ the number of Management Units f the Management Landscape that apply a land-spar
 @author diego
 */
 case class MngLandscape(
-  composition: Graph[MngUnit,Long],
+  composition: Graph[(Long,MngUnit),UnDiEdge],
   scale: Double,
-  nsparing: Int,
+  n_sparing: Int,
   size: Int)
   extends TopLandscape[MngUnit] with SpatialStochasticEvents:
   /**
@@ -31,13 +34,13 @@ case class MngLandscape(
    * @return a ListMap containing cumulative propensity for choosing each management unit
   */
   def propensityOfMngUnits(
-    ival: Double,
+    i_val: Double,
     tcp: Double,
-    pln: Graph[PlnUnit, Long],
-    eco: Graph[EcoUnit, Long]):
-  ListMap[VertexId,Double] =
-    val prop: ListMap[VertexId,Double] = ListMap(MngLandscape.probabilities(this.composition,pln,eco).mapValues(_ * tcp).collect.toSeq.sortWith(_._1 < _._1):_*)
-    prop.scanLeft[(VertexId,Double)]((-1L,ival))( (pre, curr) => (curr._1, curr._2 + pre._2) ).to(ListMap)
+    pln: Graph[(Long,PlnUnit),UnDiEdge],
+    eco: Graph[(Long,EcoUnit),UnDiEdge]):
+  ListMap[MngUnit,Double] =
+    val propensities: Map[MngUnit,Double] = MngLandscape.probabilities(this.composition,pln,eco)
+    propensities.scanLeft((propensities.head._1, i_val))( (pre, now) => (now._1, now._2 + pre._2)).to(ListMap)
 
 object MngLandscape :
   /**
@@ -56,11 +59,14 @@ object MngLandscape :
     fs: Double):
   MngLandscape =
     val nm = TopLandscape.numberOfUnits(scale,pln.size)
-    val tess_graph: Graph[ParVector[VertexId],Long] = pln.tesselate(nm)
+    val tess_graph: Graph[ParVector[Long],UnDiEdge] = pln.tesselate(nm)
     val n_sparing = fs * nm
-    val sparing_ids: Array[(VertexId,ParVector[VertexId])] = rnd.shuffle(tess_graph.vertices.collect).toArray.take( (fs * n_sparing).toInt )
-    val comp = tess_graph.mapVertices{ (vid,vec) =>
-      if sparing_ids.contains((vid,vec)) then MngUnit(vec,MngStrategy.LandSparing)  else MngUnit(vec,MngStrategy.LandSharing)
+    val sparing_ids: List[ParVector[Long]] = rnd.shuffle(tess_graph.nodes.toOuter.toList).take( (fs * n_sparing).toInt )
+    val comp = tess_graph.zipWithIndex.map{ (x,id) =>
+      //TODO: idk how map functions i.e. how to preserve edges and change node values
+      if sparing_ids.contains(x.value)
+      then (id,MngUnit(id,x.value,MngStrategy.LandSparing))
+      else (id,MngUnit(id,x.value,MngStrategy.LandSharing))
     }
     MngLandscape(comp,scale,n_sparing.toInt,nm)
 
@@ -73,11 +79,11 @@ object MngLandscape :
    * @note At the current modeling stage MngUnits are selected with uniform probability
   */
   def probabilities(
-    mng: Graph[MngUnit, Long],
-    pln: Graph[PlnUnit, Long],
-    eco: Graph[EcoUnit, Long]):
-  VertexRDD[Double] =
-    val sg: Graph[MngUnit, Long] = mng.subgraph(vpred = (_,mu) => mu.isAvailable(pln,eco))
-    sg.vertices.mapValues( (_,_) => 1.0 / sg.vertices.count )
+    mng: Graph[(Long,MngUnit), UnDiEdge],
+    pln: Graph[(Long,PlnUnit), UnDiEdge],
+    eco: Graph[(Long,EcoUnit), UnDiEdge]):
+  Map[MngUnit,Double] =
+    val available_units = mng.nodes.toOuter.filter( _._2.isAvailable(pln,eco) )
+    available_units.map( tuple => (tuple._2, 1.0/available_units.size) ).toMap
 
 end MngLandscape

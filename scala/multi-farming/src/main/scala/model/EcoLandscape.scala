@@ -55,8 +55,8 @@ case class EcoLandscape(
      * @param cover is the new cover
      * @return an updated EcoLandscape
      **/
-    def update(vids: ParVector[VertexId], unit: EcoUnit): EcoLandscape =
-      val comp = this.updateComposition(vids,unit)
+    def update(old_units: ParVector[EcoUnit], new_units: ParVector[EcoUnit]): EcoLandscape =
+      val comp = this.updateComposition(old_units,new_units)
       this.copy(composition = comp)
 
     /**
@@ -65,8 +65,8 @@ case class EcoLandscape(
      * @param cover is the new cover
      * @return an updated EcoLandscape
      * */
-    def update(vid: VertexId, unit: EcoUnit): EcoLandscape =
-      val comp = this.updateComposition(vid,unit)
+    def update(old_unit: EcoUnit, new_unit: EcoUnit): EcoLandscape =
+      val comp = this.updateComposition(old_unit,new_unit)
       this.copy(composition = comp)
 
     /**
@@ -88,11 +88,11 @@ case class EcoLandscape(
       pln: PlnLandscape,
       mng: MngLandscape,
       tcp: Double):
-    (ParVector[VertexId], EcoUnit) =
+    (ParVector[EcoUnit], ParVector[EcoUnit]) =
 
       // calculating propensities of management units and selecting the unit
       // where conversion will take place
-      val mngp: ListMap[VertexId, Double] =
+      val mngp: ListMap[MngUnit, Double] =
       mng.propensityOfMngUnits(ival, tcp, pln.composition, this.composition)
       val mid: VertexId =
         mng.selectVId(x_rnd, mngp)

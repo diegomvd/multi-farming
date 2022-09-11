@@ -1,12 +1,16 @@
 package model
 import scala.collection.immutable.ListMap
+/*
 import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
+*/
 import scala.collection.parallel.immutable.ParVector
 import scala.util.Random as rnd
+import scalax.collection.Graph
+import scalax.collection.GraphPredef._, scalax.collection.GraphEdge._
 
 /**
 Implementation of the Management Unit. MngUnits are the elementary constituents of the management landscape and are
@@ -16,7 +20,8 @@ strategy: land-sparing or land-sharing.
       course of a simulation.
 */
 case class MngUnit(
-  composition: ParVector[VertexId],
+  id: Long,
+  composition: ParVector[Long],
   strategy: MngStrategy):
   /**
   Determines if a MngUnit is available for conversion: at least one PlnUnit within the MngUnit must be available. Serves
@@ -26,26 +31,27 @@ case class MngUnit(
   @return true if the unit is available, false if it isn't
   */
   def isAvailable(
-    pln: Graph[PlnUnit,Long],
-    eco: Graph[EcoUnit,Long]):
+    pln: Graph[(Long,PlnUnit),UnDiEdge],
+    eco: Graph[(Long,EcoUnit),UnDiEdge]):
   Boolean =
-    this.composition.exists{ pln.vertices.lookup(_).head.isAvailable(eco) }
+    // searches for an planing unit within this management unit that is available considering the ecological landscape
+    this.composition.exists{ pln_id => pln.nodes.toOuter.find( _._1 == pln_id )._2.isAvailable(eco) }
 
   /**
   Calculates the conversion propensity for each of the PlnUnits belonging to this MngUnit given this MngUnit's conversion
   propensity an initial propensity value and this MngUnit's strategy.
-  @param ival the initial value for the cumulative sum of the propensities
-  @param utcp this MngUnit's total conversion propensity
+  @param i_val the initial value for the cumulative sum of the propensities
+  @param u_tcp this MngUnit's total conversion propensity
   @param pln the PlnLandscape containing the PlnUnits from this MngUnit
   @param eco is the composition of the EcoLandscape serving as base for the PlnLandscape
   @return a ListMap with the cumulative propensities for each PlnUnit inside the MngUnit
   */
   def propensityOfPlnUnits(
-    ival: Double,
-    utcp: Double,
+    i_val: Double,
+    u_tcp: Double,
     pln: PlnLandscape,
-    eco: Graph[EcoUnit,Long]):
-  ListMap[VertexId,Double] =
+    eco: Graph[(Long,EcoUnit),UnDiEdge]):
+  ListMap[PlnUnit,Double] =
     // this step is to calculate the individual propensities, sort them by vertexId and store in a ListMap
     val prop: ListMap[VertexId,Double] =
       ListMap(
@@ -63,20 +69,20 @@ object MngUnit :
   @return a VertexRDD with the relative conversion probability associated to each PlnUnit of this MngUnit
   */
   def weights(
-    comp: ParVector[VertexId],
+    comp: ParVector[Long],
     pln: PlnLandscape,
-    eco: Graph[EcoUnit,Long],
+    eco: Graph[(Long,EcoUnit),UnDiEdge],
     stg: MngStrategy):
-  VertexRDD[Double] =
+  Map[PlnUnit,Double] =
 
-    def normalize(v: VertexRDD[Double]): VertexRDD[Double] =
+    def normalize(v: Map[PlnUnit,Double]): Map[PlnUnit,Double] =
       // normalization step
       // normally w should be strictly positive since this calculation would be never
       // done in an unavailable unit, this is being extra cautious and can be helpful for debugging
-      val v_tot: Double = v.reduce((v1, v2) => (0L, v1._2 + v2._2))._2
-      if v_tot > 0.0 then v.mapValues(_ / v_tot) else v
+      val v_tot: Double = v.reduceLeft( (sum, map) => sum + map._2)
+      if v_tot > 0.0 then v.map(_ / v_tot) else v
 
-  // land-sparing units prefer to segregate new conversions from natural land
+    // land-sparing units prefer to segregate new conversions from natural land
     // thus weighting more available units close to unavailable ones
     // land-sharing units prefer to integrate new conversions with natural land
     // thus weighting more available units close to available ones
