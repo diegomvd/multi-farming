@@ -20,9 +20,10 @@ strategy: land-sparing or land-sharing.
       course of a simulation.
 */
 case class MngUnit(
-  id: Long,
-  composition: ParVector[Long],
-  strategy: MngStrategy):
+                    id: Long,
+                    composition: ParVector[Long],
+                    strategy: MngStrategy
+                  ):
   /**
   Determines if a MngUnit is available for conversion: at least one PlnUnit within the MngUnit must be available. Serves
   to build the probability of choosing any of the MngUnits of a MngLandscape: only available MngUnits can be chosen.
@@ -31,8 +32,9 @@ case class MngUnit(
   @return true if the unit is available, false if it isn't
   */
   def isAvailable(
-    pln: Graph[(Long,PlnUnit),UnDiEdge],
-    eco: Graph[(Long,EcoUnit),UnDiEdge]):
+                   pln: Graph[(Long,PlnUnit),UnDiEdge],
+                   eco: Graph[(Long,EcoUnit),UnDiEdge]
+                 ):
   Boolean =
     // searches for an planing unit within this management unit that is available considering the ecological landscape
     this.composition.exists{ pln_id => pln.nodes.toOuter.find( _._1 == pln_id )._2.isAvailable(eco) }
@@ -47,10 +49,11 @@ case class MngUnit(
   @return a ListMap with the cumulative propensities for each PlnUnit inside the MngUnit
   */
   def propensityOfPlnUnits(
-    i_val: Double,
-    u_tcp: Double,
-    pln: PlnLandscape,
-    eco: Graph[(Long,EcoUnit),UnDiEdge]):
+                            i_val: Double,
+                            u_tcp: Double,
+                            pln: PlnLandscape,
+                            eco: Graph[(Long,EcoUnit),UnDiEdge]
+                          ):
   ListMap[PlnUnit,Double] =
     // this step is to calculate the individual propensities, sort them by vertexId and store in a ListMap
     val prop: ListMap[VertexId,Double] =
@@ -69,10 +72,11 @@ object MngUnit :
   @return a VertexRDD with the relative conversion probability associated to each PlnUnit of this MngUnit
   */
   def weights(
-    comp: ParVector[Long],
-    pln: PlnLandscape,
-    eco: Graph[(Long,EcoUnit),UnDiEdge],
-    stg: MngStrategy):
+               comp: ParVector[Long],
+               pln: PlnLandscape,
+               eco: Graph[(Long,EcoUnit),UnDiEdge],
+               stg: MngStrategy
+             ):
   Map[PlnUnit,Double] =
 
     def normalize(v: Map[PlnUnit,Double]): Map[PlnUnit,Double] =

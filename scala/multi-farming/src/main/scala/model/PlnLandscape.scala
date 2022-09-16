@@ -1,13 +1,18 @@
 package model
+/*
 import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
+*/
+
 import scala.math.pow
 import scala.math.max
 import scala.collection.parallel.immutable.ParVector
 import scala.util.Random as rnd
+import scalax.collection.Graph
+import scalax.collection.GraphPredef._, scalax.collection.GraphEdge._
 
 /**
 Implementation of the Planning Landscape. A PlnLandscape is on the top of an EcoLandscape and at the base of a
@@ -19,9 +24,10 @@ MngLandscape. It is composed by a collection of PlnUnits.
       EcoLandscape is functional connectivity rather than adjacency
 */
 case class PlnLandscape(
-  composition: Graph[PlnUnit,Long],
-  scale: Double,
-  size: Int)
+                         composition: Graph[(Long,MngUnit),UnDiEdge],
+                         scale: Double,
+                         size: Int
+                       )
   extends TopLandscape[PlnUnit] with BaseLandscape[PlnUnit] with SpatialStochasticEvents:
 
     /**
@@ -33,9 +39,10 @@ case class PlnLandscape(
      * @return a VertexRDD with the number of available neighbors.
     */
     def availableNeighbors(
-      mng_unit: ParVector[VertexId],
-      eco: Graph[EcoUnit,Long]):
-    VertexRDD[Int] =
+                            mng_unit: ParVector[Long],
+                            eco: Graph[(Long,EcoUnit),UnDiEdge]
+                          ):
+    List[Int] =
       PlnLandscape.neighborAvailability(this.subLandscape(mng_unit),eco,true)
 
     /**
@@ -47,9 +54,10 @@ case class PlnLandscape(
      * @return a VertexRDD with the number of available neighbors.
      */
     def unavailableNeighbors(
-      mng_unit: ParVector[VertexId],
-      eco: Graph[EcoUnit,Long]):
-    VertexRDD[Int] =
+                              mng_unit: ParVector[Long],
+                              eco: Graph[(Long, EcoUnit), UnDiEdge]
+                            ):
+    List[Int] =
       PlnLandscape.neighborAvailability(this.subLandscape(mng_unit),eco,false)
 
     /**
@@ -58,8 +66,11 @@ case class PlnLandscape(
      *                 availability.
      * @return a sub graph of this PlnLandscape's composition.
     */
-    def subLandscape(mng_unit: ParVector[VertexId]): Graph[PlnUnit,Long] =
-      this.composition.subgraph( vpred = (vid,_) => mng_unit.exists(_ == vid) )
+    def subLandscape(
+                      mng_unit: ParVector[Long]
+                    ):
+    Graph[(Long,PlnUnit),UnDiEdge] =
+      this.composition.filter( x => mng_unit.exists(_ == x.value) )
 
 object PlnLandscape :
   /**
@@ -67,12 +78,14 @@ object PlnLandscape :
    * @param nu the number of planning units to create
    * @param eco the EcoLandscape at the base of the to be created PlnLandscape
    * @return a PlnLandscape composition graph.
-   * @todo need to check these functions depending on tesselation
+   * @todo need to check these functions depending on tesselation. Update to scala-graph still uncertain, need to work out
+   *       the voronoi tesselation first
   */
   def buildComposition(
-    nu: Int,
-    eco: EcoLandscape):
-  Graph[PlnUnit,Long] =
+                        nu: Int,
+                        eco: EcoLandscape
+                      ):
+  Graph[(Long,PlnUnit),UnDiEdge] =
     eco.tesselate(nu).mapVertices( (_,vec) => PlnUnit(vec) )
 
   /**
@@ -83,8 +96,9 @@ object PlnLandscape :
    * @return a PlnLandscape.
    * */
   def apply(
-    scale: Double,
-    eco: EcoLandscape):
+             scale: Double,
+             eco: EcoLandscape
+           ):
   PlnLandscape =
     val nu = TopLandscape.numberOfUnits(scale,eco.size)
     val comp = buildComposition(nu,eco)
@@ -99,10 +113,11 @@ object PlnLandscape :
    * @todo must check if there is need to send 0 when dstAttr is not available
   */
   def neighborAvailability(
-    comp: Graph[PlnUnit,Long],
-    eco: Graph[EcoUnit,Long],
-    available: Boolean):
-  VertexRDD[Int] =
+                            comp: Graph[(Long,PlnUnit),UnDiEdge],
+                            eco: Graph[(Long,EcoUnit),UnDiEdge],
+                            available: Boolean
+                          ):
+  List[Int] =
 
     def valueTuple(b: Boolean) = if b then (1, 0) else (0, 1)
     val v = valueTuple(available)
